@@ -23,35 +23,82 @@ options = optimset('Display','iter','Algorithm','active-set');
 
 % [x,fval] = knitromatlab_fsolve(@myfun, ones(7,1), [], options)
 % [x_fsolve, fval_fsolve] = fsolve(@myfun, ones(7,1))
-
+figure()
 x_star = [0;0;1;2.45;3.5;1.15;6.85]; 
 
-[x_newton, f_newton] = newton(@myfun, ones(7,1), x_star)
+[x_newton, f_newton, x_hist, dx_hist] = newton(@myfun, 2.*ones(7,1)); 
 
+radius = 2;
+[x, FVAL, Xhist, DxHist] = trunc_newton(@myfun, 2.*ones(7,1), radius); 
 
 end
 
-function [x, FVAL] = newton(FUN, x, x_star)
-  
+
+function [x, FVAL, x_hist, dx_hist] = trunc_newton(FUN, x, radius)
+
 [f, g] = FUN(x); 
-dist_x2star_old = norm(x - x_star); 
 f_hist = []; 
 f_hist = [f_hist, norm(f)]; 
+x_hist = []; 
+dx_hist = [];
 
+x_hist = [x_hist, x]; 
 
 iter = 0; 
-while norm(f, Inf) > 1e-6  
+while norm(f, Inf) > 1e-5 
     iter = iter + 1; 
-    x
-    dx = - g\f
+    
+    condest(g);
+    dx = - g\f;
+    
+    % trucate dx, || dx || <= radius
+    ind = abs(dx) > radius; 
+    dx(ind) = radius*( sign(dx(ind) ) ); 
+    dx_truced = dx ;
     x = x + dx;  
+    
+    x_hist = [x_hist, x]; 
+    dx_hist = [dx_hist, dx]; 
+    
     [f, g] = FUN(x); 
     f_hist = [f_hist, norm(f)]; 
-    dist_x2star = norm(x - x_star); 
 end
 FVAL = f; 
 iter
 
+hold on
+semilogy(f_hist, 'b-o', 'LineWidth', 1)
+
+end
+
+
+function [x, FVAL, x_hist, dx_hist] = newton(FUN, x)
+  
+[f, g] = FUN(x); 
+f_hist = []; 
+f_hist = [f_hist, norm(f)];
+
+x_hist = []; 
+dx_hist = [];
+x_hist = [x_hist, x]; 
+
+iter = 0; 
+while norm(f, Inf) > 1e-6  
+    iter = iter + 1; 
+    x;
+    condest(g);
+    dx = - g\f;
+    x = x + dx;  
+    [f, g] = FUN(x); 
+    f_hist = [f_hist, norm(f)]; 
+    x_hist = [x_hist, x]; 
+    dx_hist = [dx_hist, dx]; 
+end
+FVAL = f; 
+iter
+
+semilogy(f_hist, 'r-o', 'LineWidth', 1)
+hold on
 end
 
 
