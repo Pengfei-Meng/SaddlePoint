@@ -77,7 +77,7 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [cineq, ceq, Gcineq, Gceq, Hcineq]= coninequ(x)
+function [cineq, ceq, Gcineq, Gceq]= coninequ(x)
 % Constraint function
 cineq = zeros(3,1);
 cineq(1) = 8 - x(1)^2 -  x(2)^2-x(3)^2 - x(4)^2 - x(1) + x(2) - x(3) + x(4); 
@@ -92,9 +92,9 @@ Gcineq = Gcineq';
 ceq = [];  Gceq = []; 
 
 Hcineq = cell(1, length(cineq)); 
-Hcineq{1} = diag([-2, -2, -2, -2]);
-Hcineq{2} = diag([-2, -4, -2, -4]);
-Hcineq{3} = diag([-4, -2, -2,  0]);
+Hcineq{1} = diag([])
+Hcineq{2} = 
+Hcineq{3} = 
 % % if fmincon, or the interior points on paper:   c<0
 % cineq = -cineq;
 % Gcineq = -Gcineq; 

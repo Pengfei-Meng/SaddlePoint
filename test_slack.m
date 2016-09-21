@@ -1,4 +1,7 @@
 function test_slack()
+
+% study incorporating bound constraints to Newton-Krylov solves
+
 n = 3;    % design
 m = 6;    % lam, slack
 mu = 0.5; 
@@ -11,7 +14,7 @@ S = c_bnd;
 
 for k = 1:5
     % note S cannot have zero entries
-    kkt_matrix = [h,           zeros(n, m), Gc_bnd'; 
+    kkt_matrix = [h,           zeros(n, m),  Gc_bnd'; 
                   zeros(m,n),  diag(lam./S), eye(m); 
                   Gc_bnd,      eye(m),      zeros(m)]; 
 
