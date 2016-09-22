@@ -9,55 +9,124 @@ function main_interior()
 % mu : 1 --> 0
 
 mu = 1; 
-epsilon_mu = 1e-2;     epsilon_tol = 1e-6; 
+epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 
 theta = 0.5; 
 
 n = 4;    m = 3; 
 x = [1;1;1;1];     lam = ones(3,1);
-s = [4; 6; 1]; 
+S = [4; 6; 1]; 
 
-for k = 1:80
-  dx = kkt_matrix(x, s, lam, mu); 
-  x = x + dx(1:n);
-  s = s + dx(n+1:n+m);
-  lam = lam + dx(n+m+1:end); 
-  if any(s<0)
-      s
+[fobj,gobj,hobj] = objfun(x); 
+[Cg, ~, Ag, ~, Hg]= coninequ(x);
+
+E_mu0 = E_inf(0.0);
+E_local = E_mu0;
+
+glob = true; 
+
+while E_mu0 > epsilon_tol
+    
+  % Algorithm II inner loop, solve for one value of mu
+  while E_local > epsilon_mu
+      
+      % how to add the trust radius into the kkt_solve? 
+      [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg); 
+
+      if glob
+          x_temp = x + dx(1:n);
+          S_temp = S + dx(n+1:n+m);
+          lam_temp = lam + dx(n+m+1:end); 
+          
+          nu = 1.0;
+          actual_red = merit_phi(x,S,nu,mu) - merit_phi(x_temp,S_temp,nu,mu);
+          % predit_red = -q_tang_red() + nu*v_pred()
+          
+      else
+          x = x + dx(1:n);
+          S = S + dx(n+1:n+m);
+          lam = lam + dx(n+m+1:end); 
+      end
+      
+      [fobj,gobj,hobj] = objfun(x); 
+      [Cg, ~, Ag, ~, Hg]= coninequ(x);
+      E_local = E_inf(mu);    % E_local < epsilon_mu  %(it has to be)
+
+  end
+  
+  E_mu0 = E_inf(0.0);
+    
+  mu = theta*mu;
+  epsilon_mu = theta*epsilon_mu; 
+  
+  if any(S<0)
+      S           % strange that S is indeed positive all the time
       pause
   end
+  
+  if any(lam<0)
+      lam
+      pause
+  end
+ 
 end
-x
 
 % options = optimoptions(@fmincon,'Algorithm','interior-point',...
 %     'GradObj','on',...
 %     'GradConstr','on','DerivativeCheck','on'); 
 % [x,f] = fmincon(@objfun, x, [],[],[],[],[],[],@coninequ, options)
 
+    function E_ = E_inf(mu_local)
+        E = [gobj + Ag*lam;
+            S.*lam - mu_local.*ones(size(S));
+            Cg + S];
+        E_ = norm(E, Inf);
+    end
+
+end
+
+function phi = merit_phi(x,S,nu,mu)
+
+  if any(S<0)
+      sprintf('Negative Slack variable in merit_phi func')  
+      pause
+  end
+
+    [fobj,gobj,hobj] = objfun(x); 
+    [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    
+    % note, here inequality constraints only! 
+    phi = fobj - mu*sum(log(S)) + nu * norm(Cg + S,2);
+
 end
 
 
-function dx = kkt_matrix(x, S, lam, mu)
+function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
 
     n = length(x);
     m = length(S);
     
-    [fobj,gobj,hobj] = objfun(x); 
-    [cineq, ~, Gcineq, ~, hcineq]= coninequ(x);
-    hlag = hobj+lam(1).*hcineq{1} + lam(2).*hcineq{2} + lam(3).*hcineq{3}; 
+%     [fobj,gobj,hobj] = objfun(x); 
+%     [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
     
-    kkt_mat = [hlag,        zeros(n, m),  Gcineq; 
+    kkt_mat = [hlag,        zeros(n, m),  Ag; 
                zeros(m,n),  diag(lam./S), eye(m); 
-               Gcineq',      eye(m),      zeros(m)]; 
+               Ag',      eye(m),      zeros(m)]; 
             
-    kkt_rhs = -[gobj + Gcineq*lam;
+    kkt_rhs = -[gobj + Ag*lam;
                 -mu.*(1./S) + lam; 
-                cineq + S];
+                Cg + S];
             
-    dx = gmres(kkt_mat, kkt_rhs);       
-
-    c_s = cineq + S
-    norm(kkt_rhs, Inf)
-    norm(kkt_mat)
+%     E = [gobj + Ag*lam;
+%         S.*lam - mu.*ones(size(S));
+%         Cg + S];
+%     E_inf = norm(E, Inf);
+            
+    [dx,flag,relres] = gmres(kkt_mat, kkt_rhs);       
+    % relres
+    % c_s = cineq + S        % cineq + S = 0 is maintained towards solution
+    % norm(kkt_rhs, Inf)
+    % cond(kkt_mat)
     
 end
 
