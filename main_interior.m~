@@ -8,13 +8,6 @@ function main_interior()
 % L(x) = f(x) - (1-mu) ln(S) + lam_h h(x) + lam_g (g(x)-s)
 % mu : 1 --> 0
 
-% ----- Matlab ----
-options = optimoptions(@fmincon,'Algorithm','interior-point',...
-    'GradObj','on',...
-    'GradConstr','on','DerivativeCheck','on'); 
-[x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
-
-
 mu = 1; 
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 
 theta = 0.5; 
@@ -262,28 +255,14 @@ g(1,1) = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1) + ...
     exp(x(1))*(8*x(1) + 4*x(2)); 
 g(2,1) = exp(x(1))*(4*x(2) + 4*x(1) +2);
 
-h(1,1) = g(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + exp(x(1))*8;
-h(1,2) = g(2,1) + exp(x(1))*(4);
-h(2,1) = g(2,1) + exp(x(1))*(4);
-h(2,2) = exp(x(1))*(4);
+h(1,1) = g(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + 
 
 end
 
-function [cineq, ceq, Gcineq, Gceq] = coninequ(x)
+function [cineq, ceq, Gcineq, Gceq, Hcineq] = coninequ(x)
 % Nonlinear inequality constraints
-cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
+c = [1.5 + x(1)*x(2) - x(1) - x(2);     
      -x(1)*x(2) - 10];
- 
-dC1dx = [x(2)-1;
-         x(1)-1]; 
-dC2dx = [-x(2)
-         -x(1)];
-Gcineq = [dC1dx; dC2dx]; 
-
-Hcineq = cell(1, length(cineq)); 
-Hcineq{1} = [0,1;1,0];
-Hcineq{2} = [0,-1;-1,0];
-
 % Nonlinear equality constraints
 ceq = [];
 Gceq = []; 
