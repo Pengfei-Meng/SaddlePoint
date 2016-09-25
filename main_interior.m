@@ -9,11 +9,10 @@ function main_interior()
 % mu : 1 --> 0
 
 % ----- Matlab ----
-options = optimoptions(@fmincon,'Algorithm','interior-point',...
-    'GradObj','on',...
-    'GradConstr','on','DerivativeCheck','on'); 
-[x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
-
+% options = optimoptions(@fmincon,'Algorithm','interior-point',...
+%     'GradObj','on',...
+%     'GradConstr','on','DerivativeCheck','on'); 
+% [x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
 
 mu = 1; 
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 
@@ -21,7 +20,11 @@ theta = 0.5;
 
 n = 4;    m = 3; 
 x = [1;1;1;1];     lam = ones(3,1);
-S = [4; 6; 1]; 
+% S = [4; 6; 1]; 
+S = [1;1;1]; 
+% n = 2;  m = 2;
+% x = [-1,1];     lam = ones(n,1);
+
 
 [fobj,gobj,hobj] = objfun(x); 
 [Cg, ~, Ag, ~, Hg]= coninequ(x);
@@ -29,9 +32,10 @@ S = [4; 6; 1];
 E_mu0 = E_inf(0.0);
 E_local = E_mu0;
 
-glob = false; 
-radius = 1.0; 
+glob = true; 
+radius = 2.0;     % can be changed to other values, flexible with dim(x,s)
 eta = 1e-8; 
+tau = 0.995; 
 
 while E_mu0 > epsilon_tol
   
@@ -46,12 +50,39 @@ while E_mu0 > epsilon_tol
           % question remained
           % nu update? 
           % trust region with GMRES?
-          % truncate dx respecting radius          
-          ind = abs(dx) > radius; 
-          dx(ind) = radius*( sign(dx(ind) ) ); 
+          % truncate dx respecting radius   
+          %% trust region on Slack S
+          dx_ = dx(1:n);
+          ds_ = dx(n+1:n+m);
+          dxs_scaled = norm([dx_;ds_./S],2);
           
-          x_temp = x + dx(1:n);
-          S_temp = S + dx(n+1:n+m);
+          if dxs_scaled <= radius  
+              sprintf('norm(dx, S^{-1}ds) <= radius')
+          else
+              sprintf('norm(dx, S^{-1}ds) > radius, being trucated...')
+              ratio = radius/dxs_scaled; 
+              dxs_scaled_mod = [dx_;ds_./S].*ratio; 
+              dx_ = dxs_scaled_mod(1:n);
+              ds_ = dxs_scaled_mod(n+1:n+m).*S; 
+          end
+
+          pos_vec = ds_ + tau.*S; 
+          if all(pos_vec)
+              sprintf('new S positive')
+          else
+              ind = pos_vec < 0;   
+              ds_(ind) = -tau.*S(ind); 
+          end    
+          
+          %% Multipliers check
+          if all( lam + dx(n+m+1:end) > 0 )
+              sprintf('Multipliers tentative next all positive')
+          else
+              sprintf('Multipliers tentative next has negative entries')
+          end
+                    
+          x_temp = x + dx_;
+          S_temp = S + ds_;
           lam_temp = lam + dx(n+m+1:end); 
           
           [predit_red,nu] = pred_red(x,S,mu,lam,dx,nu) ; 
@@ -83,7 +114,11 @@ while E_mu0 > epsilon_tol
       [fobj,gobj,hobj] = objfun(x); 
       [Cg, ~, Ag, ~, Hg]= coninequ(x);
       E_local = E_inf(mu);    % E_local < epsilon_mu  %(it has to be)
-
+      
+      x
+      S
+      lam
+      
   end
   
   E_mu0 = E_inf(0.0);
@@ -93,6 +128,7 @@ while E_mu0 > epsilon_tol
   
   if any(S<0)
       S           % strange that S is indeed positive all the time
+      sprintf('Negative Slack variable in this mu loop') 
       pause
   end
   
@@ -154,10 +190,10 @@ end
 
 function phi = merit_phi(x,S,nu,mu)
 
-  if any(S<0)
-      sprintf('Negative Slack variable in merit_phi func')  
-      pause
-  end
+%   if any(S<0)
+%       sprintf('Negative Slack variable in merit_phi func')  
+%       pause
+%   end
 
     [fobj,gobj,hobj] = objfun(x); 
     [Cg, ~, Ag, ~, Hg]= coninequ(x);
@@ -177,8 +213,15 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
 %     [Cg, ~, Ag, ~, Hg]= coninequ(x);
     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
     
+    lam_S = lam./S;
+    if any(lam_S<0)
+        ind = lam_S < 0; 
+        lam_S(ind) = mu./(S(ind).^2);         
+    end
+    sigma = diag(lam_S);
+    
     kkt_mat = [hlag,        zeros(n, m),  Ag; 
-               zeros(m,n),  diag(lam./S), eye(m); 
+               zeros(m,n),  sigma, eye(m); 
                Ag',      eye(m),      zeros(m)]; 
             
     kkt_rhs = -[gobj + Ag*lam;
@@ -198,7 +241,7 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     
 end
 
-%{
+
 function [f,g,h] = objfun(x)
 %  Rosen-Suzuki Problem
 %  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4
@@ -224,7 +267,7 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [cineq, ceq, Gcineq, Gceq, Hcineq]= coninequ(x)
+function [cineq, ceq, Gcineq, Gceq, vargout]= coninequ(x)
 % Constraint function
 cineq = zeros(3,1);
 cineq(1) = 8 - x(1)^2 -  x(2)^2-x(3)^2 - x(4)^2 - x(1) + x(2) - x(3) + x(4); 
@@ -249,12 +292,16 @@ Gcineq = -Gcineq;
 Hcineq{1} = -1*Hcineq{1}; 
 Hcineq{2} = -1*Hcineq{2};
 Hcineq{3} = -1*Hcineq{3};
+vargout = Hcineq; 
 end
-%}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%{
 % % % Another nonlinear example
 function [f,g,h] = objfun(x)
+% solution
+% x = [-9.5473    1.0474]
+% f = 0.0236
 f = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
 g = zeros(2,1);
 h = zeros(2,2);
@@ -269,7 +316,7 @@ h(2,2) = exp(x(1))*(4);
 
 end
 
-function [cineq, ceq, Gcineq, Gceq] = coninequ(x)
+function [cineq, ceq, Gcineq, Gceq, Hcineq] = coninequ(x)
 % Nonlinear inequality constraints
 cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
      -x(1)*x(2) - 10];
@@ -278,7 +325,7 @@ dC1dx = [x(2)-1;
          x(1)-1]; 
 dC2dx = [-x(2)
          -x(1)];
-Gcineq = [dC1dx; dC2dx]; 
+Gcineq = [dC1dx, dC2dx]; 
 
 Hcineq = cell(1, length(cineq)); 
 Hcineq{1} = [0,1;1,0];
@@ -289,4 +336,4 @@ ceq = [];
 Gceq = []; 
 end
 
-
+%}
