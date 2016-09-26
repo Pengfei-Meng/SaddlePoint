@@ -42,7 +42,6 @@ while E_mu0 > epsilon_tol
   nu = 1.0; 
   % Algorithm II inner loop, solve for one value of mu
   while E_local > epsilon_mu
-      
       % how to add the trust radius into the kkt_solve? 
       [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg); 
 
@@ -50,7 +49,8 @@ while E_mu0 > epsilon_tol
           % question remained
           % nu update? 
           % trust region with GMRES?
-          % truncate dx respecting radius          
+          % truncate dx respecting radius   
+          %% trust region on Slack S
           dx_ = dx(1:n);
           ds_ = dx(n+1:n+m);
           dxs_scaled = norm([dx_;ds_./S],2);
@@ -65,13 +65,22 @@ while E_mu0 > epsilon_tol
               ds_ = dxs_scaled_mod(n+1:n+m).*S; 
           end
 
-          if all(ds_ + tau.*S)
-              sprintf('new S positive, not')
+          pos_vec = ds_ + tau.*S; 
+          if all(pos_vec > 0)
+              sprintf('new S positive')
           else
-              
-          end      
+              ind = pos_vec < 0;   
+              ds_(ind) = -tau.*S(ind); 
+          end    
           
-          
+          %% Multipliers check
+          if all( lam + dx(n+m+1:end) > 0 )
+              sprintf('Multipliers tentative next all positive')
+          else
+              sprintf('Multipliers tentative next has negative entries')
+              dx(n+m+1:end) = zeros(size(dx(n+m+1:end))); 
+          end
+                    
           x_temp = x + dx_;
           S_temp = S + ds_;
           lam_temp = lam + dx(n+m+1:end); 
@@ -81,8 +90,8 @@ while E_mu0 > epsilon_tol
           gamma = actual_red/predit_red; 
           
           if gamma >= eta
-              x = x + dx(1:n);
-              S = S + dx(n+1:n+m);
+              x = x + dx_;
+              S = S + ds_;
               lam = lam + dx(n+m+1:end);    
               if gamma >= 0.9
                   radius = max(7*norm(dx(1:n+m),2), radius);
@@ -204,8 +213,15 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
 %     [Cg, ~, Ag, ~, Hg]= coninequ(x);
     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
     
+    lam_S = lam./S;
+    if any(lam_S<0)
+        ind = lam_S < 0; 
+        lam_S(ind) = mu./(S(ind).^2);         
+    end
+    sigma = diag(lam_S);
+    
     kkt_mat = [hlag,        zeros(n, m),  Ag; 
-               zeros(m,n),  diag(lam./S), eye(m); 
+               zeros(m,n),  sigma, eye(m); 
                Ag',      eye(m),      zeros(m)]; 
             
     kkt_rhs = -[gobj + Ag*lam;
@@ -221,11 +237,12 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     % relres
     % c_s = cineq + S        % cineq + S = 0 is maintained towards solution
     % norm(kkt_rhs, Inf)
-    % cond(kkt_mat)
+    sprintf('Condition number of the kkt matrix') 
+    cond(kkt_mat)
     
 end
 
-
+%{
 function [f,g,h] = objfun(x)
 %  Rosen-Suzuki Problem
 %  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4

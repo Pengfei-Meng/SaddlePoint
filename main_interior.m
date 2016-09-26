@@ -9,6 +9,9 @@ function main_interior()
 % mu : 1 --> 0
 
 % ----- Matlab ----
+% % solution
+% % x = [-9.5473    1.0474]
+% % f = 0.0236
 % options = optimoptions(@fmincon,'Algorithm','interior-point',...
 %     'GradObj','on',...
 %     'GradConstr','on','DerivativeCheck','on'); 
@@ -18,13 +21,14 @@ mu = 1;
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 
 theta = 0.5; 
 
-n = 4;    m = 3; 
-x = [1;1;1;1];     lam = ones(3,1);
-% S = [4; 6; 1]; 
-S = [1;1;1]; 
-% n = 2;  m = 2;
-% x = [-1,1];     lam = ones(n,1);
+% n = 4;    m = 3; 
+% x = [1;1;1;1];     lam = ones(3,1);
+% % S = [4; 6; 1]; 
+% S = [1;1;1]; 
 
+n = 2;  m = 2;
+x = [-1;1];     lam = ones(n,1);
+S = [1;1];
 
 [fobj,gobj,hobj] = objfun(x); 
 [Cg, ~, Ag, ~, Hg]= coninequ(x);
@@ -42,7 +46,6 @@ while E_mu0 > epsilon_tol
   nu = 1.0; 
   % Algorithm II inner loop, solve for one value of mu
   while E_local > epsilon_mu
-      
       % how to add the trust radius into the kkt_solve? 
       [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg); 
 
@@ -67,7 +70,7 @@ while E_mu0 > epsilon_tol
           end
 
           pos_vec = ds_ + tau.*S; 
-          if all(pos_vec)
+          if all(pos_vec > 0)
               sprintf('new S positive')
           else
               ind = pos_vec < 0;   
@@ -79,6 +82,7 @@ while E_mu0 > epsilon_tol
               sprintf('Multipliers tentative next all positive')
           else
               sprintf('Multipliers tentative next has negative entries')
+              dx(n+m+1:end) = zeros(size(dx(n+m+1:end))); 
           end
                     
           x_temp = x + dx_;
@@ -90,8 +94,8 @@ while E_mu0 > epsilon_tol
           gamma = actual_red/predit_red; 
           
           if gamma >= eta
-              x = x + dx(1:n);
-              S = S + dx(n+1:n+m);
+              x = x + dx_;
+              S = S + ds_;
               lam = lam + dx(n+m+1:end);    
               if gamma >= 0.9
                   radius = max(7*norm(dx(1:n+m),2), radius);
@@ -166,7 +170,7 @@ function [p_red,nu] = pred_red(x,S,mu,lam,dx,nu)
      dx_ = dx(1:n);
      ds_ = dx(n+1:n+m);
      e = ones(length(S),1);
-     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
+     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} ; % + lam(3).*Hg{3}; 
      
      tan_red = gobj'*dx_ - mu*(e'*(ds_./S)) + ...
          0.5*(dx_'*hlag*dx_) + 0.5*(ds_'*(diag(lam./S))*ds_);
@@ -211,7 +215,7 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     
 %     [fobj,gobj,hobj] = objfun(x); 
 %     [Cg, ~, Ag, ~, Hg]= coninequ(x);
-    hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
+    hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} ; % + lam(3).*Hg{3}; 
     
     lam_S = lam./S;
     if any(lam_S<0)
@@ -237,11 +241,12 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     % relres
     % c_s = cineq + S        % cineq + S = 0 is maintained towards solution
     % norm(kkt_rhs, Inf)
-    % cond(kkt_mat)
+    sprintf('Condition number of the kkt matrix') 
+    cond(kkt_mat)
     
 end
 
-
+%{
 function [f,g,h] = objfun(x)
 %  Rosen-Suzuki Problem
 %  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4
@@ -294,9 +299,9 @@ Hcineq{2} = -1*Hcineq{2};
 Hcineq{3} = -1*Hcineq{3};
 vargout = Hcineq; 
 end
-
+%}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%{
+
 % % % Another nonlinear example
 function [f,g,h] = objfun(x)
 % solution
@@ -316,7 +321,7 @@ h(2,2) = exp(x(1))*(4);
 
 end
 
-function [cineq, ceq, Gcineq, Gceq, Hcineq] = coninequ(x)
+function [cineq, ceq, Gcineq, Gceq, vargout] = coninequ(x)
 % Nonlinear inequality constraints
 cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
      -x(1)*x(2) - 10];
@@ -330,10 +335,10 @@ Gcineq = [dC1dx, dC2dx];
 Hcineq = cell(1, length(cineq)); 
 Hcineq{1} = [0,1;1,0];
 Hcineq{2} = [0,-1;-1,0];
+vargout = Hcineq; 
 
 % Nonlinear equality constraints
 ceq = [];
 Gceq = []; 
 end
 
-%}
