@@ -37,24 +37,32 @@ S = [1;1];
 E_mu0 = E_inf(0.0);
 E_local = E_mu0;
 
+outer_tol = E_mu0 * epsilon_tol; 
+inner_tol = E_mu0 * epsilon_mu;
+
 glob = true; 
 radius = 2.0;     % can be changed to other values, flexible with dim(x,s)
+
 eta = 1e-8; 
 tau = 0.995; 
 
 outer_iter = 0; 
-while E_mu0 > epsilon_tol
+while E_mu0 > outer_tol  %epsilon_tol  %outer_tol
     
   outer_iter = outer_iter + 1; 
   inner_iter = 0; 
   nu = 1.0; 
+  radius = 3;
+  gmres_iter = [];
   % Algorithm II inner loop, solve for one value of mu
-  while E_local > epsilon_mu
+  while E_local > inner_tol     %epsilon_mu    
       
       inner_iter = inner_iter + 1; 
       % how to add the trust radius into the kkt_solve? 
-      [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg); 
+      [dx,iter] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg); 
 
+      gmres_iter = [gmres_iter,iter]; 
+      
       if glob
           % question remained
           % nu update? 
@@ -66,9 +74,10 @@ while E_mu0 > epsilon_tol
           dxs_scaled = norm([dx_;ds_./S],2);
           
           if dxs_scaled <= radius  
-              sprintf('norm(dx, S^{-1}ds) <= radius')
+              %sprintf('norm(dx, S^{-1}ds) <= radius')
+              abc=1;
           else
-              sprintf('norm(dx, S^{-1}ds) > radius, being trucated...')
+              %sprintf('norm(dx, S^{-1}ds) > radius, being trucated...')
               ratio = radius/dxs_scaled; 
               dxs_scaled_mod = [dx_;ds_./S].*ratio; 
               dx_ = dxs_scaled_mod(1:n);
@@ -77,7 +86,8 @@ while E_mu0 > epsilon_tol
 
           pos_vec = ds_ + tau.*S; 
           if all(pos_vec > 0)
-              sprintf('new S positive')
+              % sprintf('new S positive')
+              abc=1;
           else
               ind = pos_vec < 0;   
               ds_(ind) = -tau.*S(ind); 
@@ -85,9 +95,10 @@ while E_mu0 > epsilon_tol
           
           %% Multipliers check
           if all( lam + dx(n+m+1:end) > 0 )
-              sprintf('Multipliers tentative next all positive')
+              % sprintf('Multipliers tentative next all positive')
+              abc=1;
           else
-              sprintf('Multipliers tentative next has negative entries')
+              % sprintf('Multipliers tentative next has negative entries')
               dx(n+m+1:end) = zeros(size(dx(n+m+1:end))); 
           end
                     
@@ -124,17 +135,19 @@ while E_mu0 > epsilon_tol
       [fobj,gobj,hobj] = objfun(x); 
       [Cg, ~, Ag, ~, Hg]= coninequ(x);
       E_local = E_inf(mu);    % E_local < epsilon_mu  %(it has to be)
-      
-      x
-      S
-      lam
+
+%       x
+%       S
+%       lam
       
   end
   
   E_mu0 = E_inf(0.0);
     
   mu = theta*mu;
-  epsilon_mu = theta*epsilon_mu; 
+  epsilon_mu = 0.5*epsilon_mu; 
+  inner_tol = E_mu0 * epsilon_mu;
+  gmres_iter
   
   if any(S<0)
       S           % strange that S is indeed positive all the time
@@ -217,7 +230,7 @@ function phi = merit_phi(x,S,nu,mu)
 end
 
 
-function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
+function [dx, iter] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
 
     n = length(x);
     m = length(S);
@@ -236,7 +249,7 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     kkt_mat = [hlag,        zeros(n, m),  Ag; 
                zeros(m,n),  sigma, eye(m); 
                Ag',      eye(m),      zeros(m)]; 
-
+ 
 %     kkt_mat = [eye(n),        zeros(n, m),  Ag; 
 %                zeros(m,n),  sigma, eye(m); 
 %                Ag',      eye(m),      zeros(m)]; 
@@ -245,12 +258,12 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
                 -mu.*(1./S) + lam; 
                 Cg + S];
                        
-    [dx,flag,relres] = gmres(kkt_mat, kkt_rhs, [],[], 3);       %
+    [dx,flag,relres,iter] = gmres(kkt_mat, kkt_rhs, [],[]);       %
     % relres
     % c_s = cineq + S        % cineq + S = 0 is maintained towards solution
     % norm(kkt_rhs, Inf)
-    sprintf('Condition number of the kkt matrix') 
-    cond(kkt_mat)
+    % sprintf('Condition number of the kkt matrix') 
+    % cond(kkt_mat)
     
 end
 

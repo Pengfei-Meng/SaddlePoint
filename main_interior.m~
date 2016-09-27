@@ -4,11 +4,15 @@ function main_interior()
 %      g(x) >= 0              g(x) - s = 0
 % As in the paper, f, h, g all should be second order differentiable
 % no bound constraint
+% only inequality constraints in this file
 
 % L(x) = f(x) - (1-mu) ln(S) + lam_h h(x) + lam_g (g(x)-s)
 % mu : 1 --> 0
 
 % ----- Matlab ----
+% % solution
+% % x = [-9.5473    1.0474]
+% % f = 0.0236
 % options = optimoptions(@fmincon,'Algorithm','interior-point',...
 %     'GradObj','on',...
 %     'GradConstr','on','DerivativeCheck','on'); 
@@ -18,13 +22,14 @@ mu = 1;
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 
 theta = 0.5; 
 
-n = 4;    m = 3; 
-x = [1;1;1;1];     lam = ones(3,1);
-% S = [4; 6; 1]; 
-S = [1;1;1]; 
-% n = 2;  m = 2;
-% x = [-1,1];     lam = ones(n,1);
+% n = 4;    m = 3; 
+% x = [1;1;1;1];     lam = ones(3,1);
+% % S = [4; 6; 1]; 
+% S = [1;1;1]; 
 
+n = 2;  m = 2;
+x = [-1;1];     lam = ones(n,1);
+S = [1;1];
 
 [fobj,gobj,hobj] = objfun(x); 
 [Cg, ~, Ag, ~, Hg]= coninequ(x);
@@ -32,16 +37,24 @@ S = [1;1;1];
 E_mu0 = E_inf(0.0);
 E_local = E_mu0;
 
+outer_tol = E_mu0 * epsilon_tol; 
+inner_tol = E_mu0 * epsilon_mu;
+
 glob = true; 
 radius = 2.0;     % can be changed to other values, flexible with dim(x,s)
 eta = 1e-8; 
 tau = 0.995; 
 
-while E_mu0 > epsilon_tol
-  
+outer_iter = 0; 
+while E_mu0 > outer_tol  %epsilon_tol  %outer_tol
+    
+  outer_iter = outer_iter + 1; 
+  inner_iter = 0; 
   nu = 1.0; 
   % Algorithm II inner loop, solve for one value of mu
-  while E_local > epsilon_mu
+  while E_local > inner_tol     %epsilon_mu    
+      
+      inner_iter = inner_iter + 1; 
       % how to add the trust radius into the kkt_solve? 
       [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg); 
 
@@ -56,9 +69,10 @@ while E_mu0 > epsilon_tol
           dxs_scaled = norm([dx_;ds_./S],2);
           
           if dxs_scaled <= radius  
-              sprintf('norm(dx, S^{-1}ds) <= radius')
+              %sprintf('norm(dx, S^{-1}ds) <= radius')
+              abc=1;
           else
-              sprintf('norm(dx, S^{-1}ds) > radius, being trucated...')
+              %sprintf('norm(dx, S^{-1}ds) > radius, being trucated...')
               ratio = radius/dxs_scaled; 
               dxs_scaled_mod = [dx_;ds_./S].*ratio; 
               dx_ = dxs_scaled_mod(1:n);
@@ -67,7 +81,8 @@ while E_mu0 > epsilon_tol
 
           pos_vec = ds_ + tau.*S; 
           if all(pos_vec > 0)
-              sprintf('new S positive')
+              % sprintf('new S positive')
+              abc=1;
           else
               ind = pos_vec < 0;   
               ds_(ind) = -tau.*S(ind); 
@@ -75,7 +90,8 @@ while E_mu0 > epsilon_tol
           
           %% Multipliers check
           if all( lam + dx(n+m+1:end) > 0 )
-              sprintf('Multipliers tentative next all positive')
+              % sprintf('Multipliers tentative next all positive')
+              abc=1;
           else
               sprintf('Multipliers tentative next has negative entries')
               dx(n+m+1:end) = zeros(size(dx(n+m+1:end))); 
@@ -114,10 +130,12 @@ while E_mu0 > epsilon_tol
       [fobj,gobj,hobj] = objfun(x); 
       [Cg, ~, Ag, ~, Hg]= coninequ(x);
       E_local = E_inf(mu);    % E_local < epsilon_mu  %(it has to be)
-      
-      x
-      S
-      lam
+      inner_tol = E_mu0 * epsilon_mu;
+
+
+%       x
+%       S
+%       lam
       
   end
   
@@ -141,6 +159,9 @@ end
 
 x
 fobj
+
+outer_iter
+inner_iter
 
 % options = optimoptions(@fmincon,'Algorithm','interior-point',...
 %     'GradObj','on',...
@@ -166,7 +187,7 @@ function [p_red,nu] = pred_red(x,S,mu,lam,dx,nu)
      dx_ = dx(1:n);
      ds_ = dx(n+1:n+m);
      e = ones(length(S),1);
-     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
+     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} ; % + lam(3).*Hg{3}; 
      
      tan_red = gobj'*dx_ - mu*(e'*(ds_./S)) + ...
          0.5*(dx_'*hlag*dx_) + 0.5*(ds_'*(diag(lam./S))*ds_);
@@ -211,7 +232,7 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     
 %     [fobj,gobj,hobj] = objfun(x); 
 %     [Cg, ~, Ag, ~, Hg]= coninequ(x);
-    hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} + lam(3).*Hg{3}; 
+    hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} ; % + lam(3).*Hg{3}; 
     
     lam_S = lam./S;
     if any(lam_S<0)
@@ -223,21 +244,20 @@ function [dx] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     kkt_mat = [hlag,        zeros(n, m),  Ag; 
                zeros(m,n),  sigma, eye(m); 
                Ag',      eye(m),      zeros(m)]; 
+ 
+%     kkt_mat = [eye(n),        zeros(n, m),  Ag; 
+%                zeros(m,n),  sigma, eye(m); 
+%                Ag',      eye(m),      zeros(m)]; 
             
     kkt_rhs = -[gobj + Ag*lam;
                 -mu.*(1./S) + lam; 
                 Cg + S];
-            
-%     E = [gobj + Ag*lam;
-%         S.*lam - mu.*ones(size(S));
-%         Cg + S];
-%     E_inf = norm(E, Inf);
-            
-    [dx,flag,relres] = gmres(kkt_mat, kkt_rhs);       
+                       
+    [dx,flag,relres] = gmres(kkt_mat, kkt_rhs, [],[]);       %
     % relres
     % c_s = cineq + S        % cineq + S = 0 is maintained towards solution
     % norm(kkt_rhs, Inf)
-    sprintf('Condition number of the kkt matrix') 
+    % sprintf('Condition number of the kkt matrix') 
     cond(kkt_mat)
     
 end
@@ -295,9 +315,9 @@ Hcineq{2} = -1*Hcineq{2};
 Hcineq{3} = -1*Hcineq{3};
 vargout = Hcineq; 
 end
-
+%}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%{
+
 % % % Another nonlinear example
 function [f,g,h] = objfun(x)
 % solution
@@ -317,7 +337,7 @@ h(2,2) = exp(x(1))*(4);
 
 end
 
-function [cineq, ceq, Gcineq, Gceq, Hcineq] = coninequ(x)
+function [cineq, ceq, Gcineq, Gceq, vargout] = coninequ(x)
 % Nonlinear inequality constraints
 cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
      -x(1)*x(2) - 10];
@@ -331,10 +351,10 @@ Gcineq = [dC1dx, dC2dx];
 Hcineq = cell(1, length(cineq)); 
 Hcineq{1} = [0,1;1,0];
 Hcineq{2} = [0,-1;-1,0];
+vargout = Hcineq; 
 
 % Nonlinear equality constraints
 ceq = [];
 Gceq = []; 
 end
 
-%}
