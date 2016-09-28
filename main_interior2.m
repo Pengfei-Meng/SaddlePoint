@@ -3,6 +3,7 @@ function main_interior2()
 % min  f(x)              min  f(x) - mu ln(S)
 % s.t. h(x) = 0          s.t. h(x) = 0
 %      g(x) >= 0              g(x) - s = 0
+% untested at the moment
 % As in the paper, f, h, g all should be second order differentiable
 % no bound constraint
 
