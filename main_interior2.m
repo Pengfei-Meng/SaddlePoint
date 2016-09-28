@@ -104,7 +104,9 @@ while E_mu0 > epsilon_tol
           if gamma >= eta
               x = x + dx_;
               S = S + ds_;
-              lam = lam + dx(n+m+1:end);    
+              lam_eq = lam_eq + dx(n+m_ineq+1:n+m_ineq+m_eq);  
+              lam_ineq = lam_ineq + dx(end-m_ineq+1 : end);  
+              
               if gamma >= 0.9
                   radius = max(7*norm(dx(1:n+m),2), radius);
               elseif gamma >= 0.3
@@ -120,16 +122,18 @@ while E_mu0 > epsilon_tol
       else
           x = x + dx(1:n);
           S = S + dx(n+1:n+m);
-          lam = lam + dx(n+m+1:end); 
+          lam_eq = lam_eq + dx(n+m_ineq+1:n+m_ineq+m_eq);  
+          lam_ineq = lam_ineq + dx(end-m_ineq+1 : end);  
+          
       end
       
       [fobj,gobj,hobj] = objfun(x); 
-      [Cg, ~, Ag, ~, Hg]= coninequ(x);
+      [Cg, Ch, Ag, Ah, Hg, Hh]= coninequ(x);
       E_local = E_inf(mu);    % E_local < epsilon_mu  %(it has to be)
       
       x
       S
-      lam
+      % lam_ineq
       
   end
   
@@ -189,8 +193,8 @@ function [p_red,nu] = pred_red(x,S,mu,lam_eq,lam_ineq,dx,nu)
      tan_red = gobj'*dx_ - mu*(e'*(ds_./S)) + ...
          0.5*(dx_'*hlag*dx_) + 0.5*(ds_'*(diag(lam_ineq./S))*ds_);
      
-     gs = Cg + S; 
-     ATv = Ag'*dx_ + ds_; 
+     gs = [Ch; Cg + S]; 
+     ATv = [Ah'*dx_; Ag'*dx_ + ds_]; 
      vpred = norm(gs) - norm( gs + ATv ) ;  
      
      norm_obj = gs' * ATv + ATv'*ATv; 
@@ -208,16 +212,12 @@ end
 
 function phi = merit_phi(x,S,nu,mu)
 
-%   if any(S<0)
-%       sprintf('Negative Slack variable in merit_phi func')  
-%       pause
-%   end
-
     [fobj,gobj,hobj] = objfun(x); 
-    [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    [Cg, Ch, Ag, Ah, Hg, Hh]= coninequ(x);
     
     % note, here inequality constraints only! 
-    phi = fobj - mu*sum(log(S)) + nu * norm(Cg + S,2);
+    gs = [Ch; Cg + S]; 
+    phi = fobj - mu*sum(log(S)) + nu * norm(gs,2);
 
 end
 

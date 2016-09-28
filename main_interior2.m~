@@ -27,15 +27,15 @@ theta = 0.5;
 
 % note: only inequality has S; equality no S
 % lam : has two components as well
-n = 3;  
-meq = 1;
-mineq = 2; 
-m = meq + mineq; 
+n = 2;  
+m_eq = 1;
+m_ineq = 2; 
+m = m_eq + m_ineq; 
 
 x = ones(n,1);     
-lam_eq = ones(meq,1);         % lam_eq  lam_ineq
-lam_ineq = ones(mineq,1);
-S = ones(mineq,1);       
+lam_eq = ones(m_eq,1);         % lam_eq  lam_ineq
+lam_ineq = ones(m_ineq,1);
+S = ones(m_ineq,1);       
 %----------------------------------------------------------
 
 [fobj,gobj,hobj] = objfun(x); 
@@ -64,7 +64,7 @@ while E_mu0 > epsilon_tol
           % truncate dx respecting radius   
           %% trust region on Slack S
           dx_ = dx(1:n);
-          ds_ = dx(n+1:n+m);
+          ds_ = dx(n+1:n+m_ineq);
           dxs_scaled = norm([dx_;ds_./S],2);
           
           if dxs_scaled <= radius  
@@ -74,7 +74,7 @@ while E_mu0 > epsilon_tol
               ratio = radius/dxs_scaled; 
               dxs_scaled_mod = [dx_;ds_./S].*ratio; 
               dx_ = dxs_scaled_mod(1:n);
-              ds_ = dxs_scaled_mod(n+1:n+m).*S; 
+              ds_ = dxs_scaled_mod(n+1:n+m_ineq).*S; 
           end
 
           pos_vec = ds_ + tau.*S; 
@@ -86,25 +86,26 @@ while E_mu0 > epsilon_tol
           end    
           
           %% Multipliers check
-          if all( lam + dx(n+m+1:end) > 0 )
+          if all( lam_ineq + dx(end-m_ineq+1:end) > 0 )
               sprintf('Multipliers tentative next all positive')
           else
               sprintf('Multipliers tentative next has negative entries')
-              dx(n+m+1:end) = zeros(size(dx(n+m+1:end))); 
+              dx(end-m_ineq+1:end) = zeros(size(dx(end-m_ineq+1:end))); 
           end
                     
           x_temp = x + dx_;
           S_temp = S + ds_;
-          lam_temp = lam + dx(n+m+1:end); 
+          % lam_temp_eq = lam + dx(n+m+1:end); 
           
-          [predit_red,nu] = pred_red(x,S,mu,lam,dx,nu) ; 
+          [predit_red,nu] = pred_red(x,S,mu,lam_eq,lam_ineq,dx,nu) ; 
           actual_red = merit_phi(x,S,nu,mu) - merit_phi(x_temp,S_temp,nu,mu);
           gamma = actual_red/predit_red; 
           
           if gamma >= eta
               x = x + dx_;
               S = S + ds_;
-              lam = lam + dx(n+m+1:end);    
+              lam_eq = lam_eq + dx(n+m_ineq+1:end);  
+              
               if gamma >= 0.9
                   radius = max(7*norm(dx(1:n+m),2), radius);
               elseif gamma >= 0.3
@@ -129,7 +130,7 @@ while E_mu0 > epsilon_tol
       
       x
       S
-      lam
+      % lam_ineq
       
   end
   
@@ -166,22 +167,31 @@ fobj
 end
 
 
-function [p_red,nu] = pred_red(x,S,mu,lam,dx,nu)
+function [p_red,nu] = pred_red(x,S,mu,lam_eq,lam_ineq,dx,nu)
     [fobj,gobj,hobj] = objfun(x); 
-    [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    [Cg, Ch, Ag, Ah, Hg, Hh]= coninequ(x);
 
      n = length(x); 
-     m = length(Cg);
+     m_ineq = length(Cg);
+     m_eq = length(Ch); 
      dx_ = dx(1:n);
-     ds_ = dx(n+1:n+m);
+     ds_ = dx(n+1:n+m_ineq);
      e = ones(length(S),1);
-     hlag = hobj+lam(1).*Hg{1} + lam(2).*Hg{2} ; % + lam(3).*Hg{3}; 
      
+     hlag = hobj; 
+     for j = 1:m_ineq
+        hlag = hlag + lam_ineq(j).*Hg{j};
+     end
+    
+     for j = 1:m_eq
+        hlag = hlag + lam_eq.*Hh{j};
+     end
+          
      tan_red = gobj'*dx_ - mu*(e'*(ds_./S)) + ...
-         0.5*(dx_'*hlag*dx_) + 0.5*(ds_'*(diag(lam./S))*ds_);
+         0.5*(dx_'*hlag*dx_) + 0.5*(ds_'*(diag(lam_ineq./S))*ds_);
      
-     gs = Cg + S; 
-     ATv = Ag'*dx_ + ds_; 
+     gs = [Ch; Cg + S]; 
+     ATv = [Ah'*dx_; Ag'*dx_ + ds_]; 
      vpred = norm(gs) - norm( gs + ATv ) ;  
      
      norm_obj = gs' * ATv + ATv'*ATv; 
@@ -199,16 +209,12 @@ end
 
 function phi = merit_phi(x,S,nu,mu)
 
-%   if any(S<0)
-%       sprintf('Negative Slack variable in merit_phi func')  
-%       pause
-%   end
-
     [fobj,gobj,hobj] = objfun(x); 
-    [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    [Cg, Ch, Ag, Ah, Hg, Hh]= coninequ(x);
     
     % note, here inequality constraints only! 
-    phi = fobj - mu*sum(log(S)) + nu * norm(Cg + S,2);
+    gs = [Ch; Cg + S]; 
+    phi = fobj - mu*sum(log(S)) + nu * norm(gs,2);
 
 end
 
@@ -244,13 +250,7 @@ function [dx] = kkt_matrix(x, S, lam_ineq, lam_eq, mu, gobj,hobj,Cg,Ag,Hg,ceq,Ah
                 -mu.*(1./S) + lam_ineq;
                 ceq; 
                 Cg + S];                
-            
-            
-%     E = [gobj + Ag*lam;
-%         S.*lam - mu.*ones(size(S));
-%         Cg + S];
-%     E_inf = norm(E, Inf);
-            
+                      
     [dx,flag,relres] = gmres(kkt_mat, kkt_rhs);       
     % relres
     % c_s = cineq + S        % cineq + S = 0 is maintained towards solution
@@ -351,12 +351,11 @@ Hcineq{1} = [0,1;1,0];
 Hcineq{2} = [0,-1;-1,0];
 
 % Nonlinear equality constraints
-ceq = x(1) - x(2)
-
-ceq = cineq;
-Gceq = Gcineq; 
-Hceq = Hcineq; 
-
-% vargout = Hcineq; 
+ceq = x(1)^2 + x(2)^2 - 4;
+Gceq = [2*x(1);
+        2*x(2)];   
+Hceq = cell(1, length(ceq));    
+Hceq{1} = [2,0;
+           0,2]; 
 end
 
