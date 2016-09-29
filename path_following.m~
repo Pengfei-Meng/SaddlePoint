@@ -8,21 +8,20 @@ m = m_eq + m_ineq;
 x = ones(n,1);
 lam_eq = ones(m_eq,1);         % lam_eq  lam_ineq
 lam_ineq = ones(m_ineq,1);
-%S = ones(m_ineq,1);
-S = [0.5; 10];
+S = ones(m_ineq,1);
 
 [fobj,gobj,hobj] = objfun(x);
 [Cg, ceq, Ag, Ah, Hg, Hh]= coninequ(x);
 
 
 % --------- other parameters ---------
-mu = 0.6;
+mu = 1;
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6;
 theta = 0.5;
 
-x0 = 1.2.*x; 
+x0 = 2.*x; 
 
-[E_mu0, kkt_rhs] = E_inf(0.0);
+E_mu0 = E_inf(0.0);
 E_local = E_mu0;
 
 outer_tol = E_mu0 * epsilon_tol;
@@ -34,29 +33,18 @@ while E_mu0 > outer_tol  %epsilon_tol  %outer_tol
     
     radius = 2.0;
 
+    
     while E_local > inner_tol     %epsilon_mu
         
-        % --------------predictor step----------------
         e = ones(n + m_ineq + m, 1);
         steep_descent = kkt_matrix_product(e);
         
-        dx = -radius.*steep_descent;
-               
-        x = x + dx(1:n);
-        S = S + dx(n+1:n+m_ineq);
-        % lam_eq = lam_eq + dx(n+m_ineq+1:n+m_ineq+m_eq);
-        lam_ineq = lam_ineq + dx(end-m_ineq+1 : end);
+        dx = radius.*steep_descent;
         
-        % --------------correction step----------------
-        [fobj,gobj,hobj] = objfun(x);
-        [Cg, ceq, Ag, Ah, Hg, Hh]= coninequ(x);
-        
-        
-        [dx,flag,relres,iter] = gmres(@kkt_matrix_product, kkt_rhs, [],[]);      
         
         x = x + dx(1:n);
-        S = S + dx(n+1:n+m_ineq);
-        % lam_eq = lam_eq + dx(n+m_ineq+1:n+m_ineq+m_eq);
+        S = S + dx(n+1:n+m);
+        lam_eq = lam_eq + dx(n+m_ineq+1:n+m_ineq+m_eq);
         lam_ineq = lam_ineq + dx(end-m_ineq+1 : end);
         
         
@@ -69,22 +57,22 @@ end
 
 
 
-    function [E_, kkt_rhs] = E_inf(mu_local)
+    function E_ = E_inf(mu_local)
         %         E = [gobj + Ag*lam_ineq + Ah*lam_eq;
         %             S.*lam_ineq - mu_local.*ones(size(S));
         %             ceq;
         %             Cg + S];
-        kkt_rhs = -[(1-mu).*gobj + mu.*(x-x0) + Ag*lam_ineq;
+        E = [(1-mu).*gobj + mu.*(x-x0) + Ag*lam_ineq;
             S.*lam_ineq - mu_local.*ones(size(S));
             ceq;
             Cg + S];
         
-        E_ = norm(kkt_rhs, Inf);
+        E_ = norm(E, Inf);
     end
 
     function Kv = kkt_matrix_product(in_vec)
         
-        hlag = (1-mu).*hobj + mu.*eye(length(hobj));
+        hlag = (1-mu).*hobj + mu.*ones(leng);
         for j = 1:m_ineq
             hlag = hlag + lam_ineq(j).*Hg{j};
         end
@@ -100,19 +88,12 @@ end
         end
         sigma = diag(lam_S);
         
-%         kkt_mat = [hlag,        zeros(n, m_ineq),    Ah,              Ag;
-%             zeros(m_ineq,n),  sigma,    zeros(m_ineq,m_eq),  eye(m_ineq);
-%             Ah',        zeros(m_eq,m_ineq + m_eq + m_ineq);
-%             Ag',      eye(m_ineq),      zeros(m_ineq, m_eq + m_ineq)];
+        kkt_mat = [hlag,        zeros(n, m_ineq),    Ah,              Ag;
+            zeros(m_ineq,n),  sigma,    zeros(m_ineq,m_eq),  eye(m_ineq);
+            Ah',        zeros(m_eq,m_ineq + m_eq + m_ineq);
+            Ag',      eye(m_ineq),      zeros(m_ineq, m_eq + m_ineq)];
         
-        kkt_mat = [hlag,        zeros(n, m_ineq),               Ag;
-            zeros(m_ineq,n),  sigma,      eye(m_ineq);
-            Ag',      eye(m_ineq),      zeros(m_ineq,  m_ineq)];
         
-        cond(kkt_mat)
-        
-        Kv = kkt_mat*in_vec;  
-        Kv = Kv./norm(Kv); 
     end
 end
 
