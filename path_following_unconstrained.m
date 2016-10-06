@@ -4,15 +4,16 @@ n = 2;
 x = [0;0];
 
 mu = 1.0;
-x0 = [-1;1]; 
+x0 = [-5;-1]; 
  
 % ------- parameters setting --------
-f_size_min = 0.05; 
-f_size_max = 5; 
+% Rosenbrock:    f_size_max=2;   delta_bar = 1;   phi_bar = 7/180*pi;  
+f_size_min = 0.05;         % outer: 100,  inner: 1000
+f_size_max = 2;                
 dmu_min = -0.9; 
 dmu_max = -0.01; 
-delta_bar = 8;
-phi_bar = 70/180*pi;               % can be manipulated here 
+delta_bar = 1;
+phi_bar = 7/180*pi;               % can be manipulated here 
 % -----------------------------------
 
 
@@ -24,6 +25,7 @@ outer_tol = norm0*1e-15;
 step_size = 0.05;                 % norm(x0)  %2.0; 
 
 iter = 0; 
+inner_iter = 0; 
 while norm0 > outer_tol  
     iter = iter + 1; 
     % predictor direction
@@ -69,7 +71,8 @@ while norm0 > outer_tol
      
     x_p0 = x;     
      % corrector
-     while normr > inner_tol               
+     while normr > inner_tol 
+        inner_iter = inner_iter + 1; 
         K_newton = (1-mu).*h + mu.*eye(n);
         b_newton = -((1-mu)*g + mu*(x-x0));
         dx = K_newton\b_newton;
@@ -83,6 +86,7 @@ while norm0 > outer_tol
      norm0 = norm(g);   
 end
 iter
+inner_iter
 x
 [f, g, h] = objfun(x);        
 residual = (1-mu).*g + mu.*(x-x0);
@@ -108,30 +112,30 @@ end
 
 
  
-function [f,g,h] = objfun(x)
-% solution
-% x = [0.5    -1.0]
-f = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
-g = zeros(2,1);
-h = zeros(2,2);
-g(1,1) = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1) + ...
-    exp(x(1))*(8*x(1) + 4*x(2)); 
-g(2,1) = exp(x(1))*(4*x(2) + 4*x(1) +2);
-
-h(1,1) = g(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + exp(x(1))*8;
-h(1,2) = g(2,1) + exp(x(1))*(4);
-h(2,1) = g(2,1) + exp(x(1))*(4);
-h(2,2) = exp(x(1))*(4);
-
-end
+% function [f,g,h] = objfun(x)
+% % solution
+% % x = [0.5    -1.0]
+% f = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
+% g = zeros(2,1);
+% h = zeros(2,2);
+% g(1,1) = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1) + ...
+%     exp(x(1))*(8*x(1) + 4*x(2)); 
+% g(2,1) = exp(x(1))*(4*x(2) + 4*x(1) +2);
+% 
+% h(1,1) = g(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + exp(x(1))*8;
+% h(1,2) = g(2,1) + exp(x(1))*(4);
+% h(2,1) = g(2,1) + exp(x(1))*(4);
+% h(2,2) = exp(x(1))*(4);
+% 
+% end
  
 
-% function [f, g, h] = objfun(x)
-% % solution x=[1,1], f = 0; 
-% f = 100*(x(1)^2 - x(2))^2 + (x(1)-1)^2;
-% 
-% g = zeros(2,1); 
-% g(1) = 100*(2*(x(1)^2-x(2))*2*x(1)) + 2*(x(1)-1);
-% g(2) = 100*(-2*(x(1)^2-x(2)));
-% h=[-400*(x(2)-3*x(1)^2)+2, -400*x(1); -400*x(1), 200];
-% end
+function [f, g, h] = objfun(x)
+% solution x=[1,1], f = 0; 
+f = 100*(x(1)^2 - x(2))^2 + (x(1)-1)^2;
+
+g = zeros(2,1); 
+g(1) = 100*(2*(x(1)^2-x(2))*2*x(1)) + 2*(x(1)-1);
+g(2) = 100*(-2*(x(1)^2-x(2)));
+h=[-400*(x(2)-3*x(1)^2)+2, -400*x(1); -400*x(1), 200];
+end
