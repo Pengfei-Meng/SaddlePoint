@@ -13,6 +13,7 @@ function main_interior()
 % % solution
 % % x = [-9.5473    1.0474]
 % % f = 0.0236
+
 % options = optimoptions(@fmincon,'Algorithm','interior-point',...
 %     'GradObj','on',...
 %     'GradConstr','on','DerivativeCheck','on'); 

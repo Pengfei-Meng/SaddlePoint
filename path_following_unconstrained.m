@@ -1,26 +1,75 @@
 function path_following_unconstrained()
 
 n = 2;
-x = [1;1];
+x = [0;0];
 
 mu = 1.0;
-% x0 = [0;0];
-x0 = x.*0.8; 
+x0 = [-1;1]; 
+ 
+% ------- parameters setting --------
+f_size_min = 0.05; 
+f_size_max = 5; 
+dmu_min = -0.9; 
+dmu_max = -0.01; 
+delta_bar = 8;
+phi_bar = 70/180*pi;               % can be manipulated here 
+% -----------------------------------
 
-step_size = norm(x);           % this is pure guessing
+
 [f, g, h] = objfun(x);
 residual = (1-mu).*g + mu.*(x-x0);
-norm0 = norm(residual);
-normr = norm0;
-xold = x; 
-told = zeros(n+1,1); 
 
-delta_bar = 1.4;
-phi_bar = 1.3; 
+norm0 = norm(g);
+outer_tol = norm0*1e-15; 
+step_size = 0.05;                 % norm(x0)  %2.0; 
 
-while mu >= 0    
-    % corrector
-    while normr > norm0*0.3                
+iter = 0; 
+while norm0 > outer_tol  
+    iter = iter + 1; 
+    % predictor direction
+    [f, g, h] = objfun(x);
+    K = mu.*eye(n) + (1-mu).*h;
+    b = (-g + (x - x0));
+    dxdmu = K\b;
+    tau = [dxdmu; -1];    
+    t = tau./norm(tau);             % normalized Newton step
+  
+    if iter > 1
+        % step length calculation
+        delta = norm(x - x_p0); 
+        phi = acos(t'*tsave); 
+        
+        f_size = max(sqrt(delta/delta_bar), phi/phi_bar); 
+        f_size = max(f_size_min, f_size); 
+        f_size = min(f_size_max, f_size); 
+        step_size = step_size/f_size; 
+
+        if f_size >= f_size_max
+            x = xsave; 
+            t = tsave; 
+        end        
+    end
+    
+    tsave = t; 
+    xsave = x;  
+    
+    x = x + step_size.*t(1:end-1);
+    
+    dmu = step_size.*t(end); 
+    dmu = max(dmu_min, dmu);
+    dmu = min(dmu_max, dmu);    
+    mu = mu + dmu; 
+    
+    mu = max(0.0, mu); 
+        
+    [f, g, h] = objfun(x);
+    residual = (1-mu).*g + mu.*(x-x0);
+    normr = norm(residual);
+    inner_tol = normr*0.01;
+     
+    x_p0 = x;     
+     % corrector
+     while normr > inner_tol               
         K_newton = (1-mu).*h + mu.*eye(n);
         b_newton = -((1-mu)*g + mu*(x-x0));
         dx = K_newton\b_newton;
@@ -29,29 +78,16 @@ while mu >= 0
         [f, g, h] = objfun(x);        
         residual = (1-mu).*g + mu.*(x-x0);
         normr = norm(residual); 
-    end  
-
-    % predictor direction
-    [f, g, h] = objfun(x);
-    K = mu.*eye(n) + (1-mu).*h;
-    b = -g + (x - x0);
-    dxdmu = K\b;
-    tau = [dxdmu; -1];
-    t = tau./norm(tau);
-    
-    % step length calculation
-    delta = norm(x - xold); 
-    phi = acos(t'*told); 
-    f = max(sqrt(delta/delta_bar), sqrt(phi/phi_bar)); 
-    step_size = step_size/f; 
-    
-    % update predictor, mu, x
-    x = x + step_size.*t(1:end-1);
-    mu = mu + step_size.*t(end);   
-    
-    mu = 0.5*mu; 
+     end  
+     
+     norm0 = norm(g);   
 end
+iter
 x
+[f, g, h] = objfun(x);        
+residual = (1-mu).*g + mu.*(x-x0);
+normr = norm(g)
+
 end
 
 
@@ -71,12 +107,31 @@ end
 % end
 
 
-function [f, g, h] = objfun(x)
-% solution x=[1,1], f = 0; 
-f = 100*(x(1)^2 - x(2))^2 + (x(1)-1)^2;
+ 
+function [f,g,h] = objfun(x)
+% solution
+% x = [0.5    -1.0]
+f = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
+g = zeros(2,1);
+h = zeros(2,2);
+g(1,1) = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1) + ...
+    exp(x(1))*(8*x(1) + 4*x(2)); 
+g(2,1) = exp(x(1))*(4*x(2) + 4*x(1) +2);
 
-g = zeros(2,1); 
-g(1) = 100*(2*(x(1)^2-x(2))*2*x(1)) + 2*(x(1)-1);
-g(2) = 100*(-2*(x(1)^2-x(2)));
-h=[-400*(x(2)-3*x(1)^2)+2, -400*x(1); -400*x(1), 200];
+h(1,1) = g(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + exp(x(1))*8;
+h(1,2) = g(2,1) + exp(x(1))*(4);
+h(2,1) = g(2,1) + exp(x(1))*(4);
+h(2,2) = exp(x(1))*(4);
+
 end
+ 
+
+% function [f, g, h] = objfun(x)
+% % solution x=[1,1], f = 0; 
+% f = 100*(x(1)^2 - x(2))^2 + (x(1)-1)^2;
+% 
+% g = zeros(2,1); 
+% g(1) = 100*(2*(x(1)^2-x(2))*2*x(1)) + 2*(x(1)-1);
+% g(2) = 100*(-2*(x(1)^2-x(2)));
+% h=[-400*(x(2)-3*x(1)^2)+2, -400*x(1); -400*x(1), 200];
+% end
