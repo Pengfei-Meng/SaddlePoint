@@ -14,10 +14,10 @@ function main_interior()
 % % x = [-9.5473    1.0474]
 % % f = 0.0236
 
-% options = optimoptions(@fmincon,'Algorithm','interior-point',...
-%     'GradObj','on',...
-%     'GradConstr','on','DerivativeCheck','on'); 
-% [x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
+options = optimoptions(@fmincon,'Algorithm','interior-point',...
+    'GradObj','on',...
+    'GradConstr','on','DerivativeCheck','on'); 
+[x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
 
 mu = 1; 
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 

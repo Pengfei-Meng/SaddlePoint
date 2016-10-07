@@ -8,14 +8,18 @@ f_size_min = 0.05;         % outer: 100,  inner: 1000
 f_size_max = 5;                
 dmu_min = -0.9; 
 dmu_max = -0.01; 
-delta_bar = 1;
-phi_bar = 7/180*pi;               % can be manipulated here 
+delta_bar = 4;                 % simpler problem, large delta_bar
+phi_bar = 7/180*pi;            
 
 x = [4;4];
+lam = [1;1];
 mu = 1.0;
 x0 = [4;4]; 
-
-
+% ---------- looking for b0, c0 ----------
+[f,g,h] = objfun(x0);
+[cineq, Gcineq, Hcineq] = confun(x0); 
+b0 = cineq + ones(size(cineq));        % cineq(x0) - b0 < 0;  c0 > 0; 
+c0 = ones(size(cineq)); 
 % -------- main part for homotopy continuation --------
 step_size = 0.05;               
 
@@ -25,7 +29,7 @@ while mu > 0.0
     outer_iter = outer_iter + 1; 
     
     % predictor direction
-    [Homo, dHdx, dHdmu] = obj_homo(x, mu, x0); 
+    [Homo, dHdx, dHdmu] = obj_homo(x, lam, mu, x0, b0, c0); 
     
     dxdmu = dHdx \ dHdmu;
     tau = [dxdmu; -1];    
@@ -79,6 +83,96 @@ outer_iter
 end
 
 
+function [Homo, dHdx, dHdmu] = obj_homo(x, lam, mu, x0, b0, c0)
+
+[f, g, h] = objfun(x);
+Df = g; 
+[cineq, Gcineq, Hcineq] = confun(x); 
+
+
+grad_lag = g + Gcineq*lam; 
+
+K_1 = (1-mu).*grad_lag + mu.*(x-x0); 
+
+ineq = mu.*b0 - cineq; 
+K_2 = -abs( ineq - lam ).^3 + ineq.*3 + lam.^3 - mu.*c0; 
+
+Homo = [K_1;
+        K_2]; 
+
+% ------------- calculating gradient --------------    
+dCubicdX = 3.* ( -Gcineq  ) * (ineq - lam).^2; 
+dCubicdmu = 3.* b0 .* (ineq - lam).^2; 
+ind = ineq < lam;
+if any(ind)
+   dCubicdX(ind) = -dCubicdX(ind); 
+   dCubicdmu(ind) = -dCubicdmu(ind); 
+end
+
+hess_lag = h; 
+for j = 1:length(cineq)
+    hess_lag = hess_lag + lam(j).*Hcineq{j};
+end
+
+
+dK1dx = (1-mu).*hess_lag + mu.*eye(length(x)); 
+dK2dx = -dCubicdX + 3.*(-Gcineq)*(ineq).^2; 
+dHdx = [dK1dx, dK2dx]; 
+    
+dK1dmu = -grad_lag + (x-x0); 
+dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0; 
+    
+dHdmu = [dK1dmu, dK2dmu];  
+
+end  
+
+function [f,g,h] = objfun(x)
+% A more complex case, only inequality constraints
+% solution
+% x = [-9.5473    1.0474]
+% f = 0.0236
+f = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
+g = zeros(2,1);
+h = zeros(2,2);
+g(1,1) = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1) + ...
+    exp(x(1))*(8*x(1) + 4*x(2)); 
+g(2,1) = exp(x(1))*(4*x(2) + 4*x(1) +2);
+
+h(1,1) = g(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + exp(x(1))*8;
+h(1,2) = g(2,1) + exp(x(1))*(4);
+h(2,1) = g(2,1) + exp(x(1))*(4);
+h(2,2) = exp(x(1))*(4);
+
+end
+
+function [cineq, Gcineq, Hcineq] = confun(x)
+% Nonlinear inequality constraints   <= 0 here
+cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
+     -x(1)*x(2) - 10];
+ 
+dC1dx = [x(2)-1;
+         x(1)-1]; 
+dC2dx = [-x(2)
+         -x(1)];
+Gcineq = [dC1dx, dC2dx]; 
+
+Hcineq = cell(1, length(cineq)); 
+Hcineq{1} = [0,1;1,0];
+Hcineq{2} = [0,-1;-1,0];
+
+end
+
+% if Df > x
+%     dCubicdX = 3.*(Df - x).^2' * (h - eye(length(x))); 
+% elseif Df < x
+%     dCubicdX = -3.*(Df - x).^2' * (h - eye(length(x))); 
+% else
+%     sprintf('Df == x! Cubic gradient not exist at middle absolute point')
+%     pause
+% end
+
+%{
+
 function [Homo, dHdx, dHdmu] = obj_homo(x, mu, a)
 % 2D problem
 % min ( (x+1)^2 + (y+1)^2 ) /2                convex in first try
@@ -119,6 +213,8 @@ g = [x(1)+1;
      x(2)+1];
 h = [1,0; 0,1];  
 end
+
+%}
 
 %{
 function [Homo, dHdx, dHdmu] = obj_homo(x, mu, a)
