@@ -29,7 +29,7 @@ while mu > 0.0
     outer_iter = outer_iter + 1; 
     
     % predictor direction
-    [Homo, dHdx, dHdmu] = obj_homo(x, lam, mu, x0, b0, c0); 
+    [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0); 
     
     dxdmu = dHdx \ dHdmu;
     tau = [dxdmu; -1];    
@@ -48,13 +48,16 @@ while mu > 0.0
         if f_size >= f_size_max
             x = xsave; 
             t = tsave; 
+            lam = lamsave; 
         end        
     end
     
     tsave = t; 
-    xsave = x;  
+    xsave = x; 
+    lamsave = lam; 
     
-    x = x + step_size.*t(1:end-1);
+    x = x + step_size.*t(1:length(x));
+    lam = lam + step_size.*t(length(x)+1:end-1);
     
     dmu = step_size.*t(end); 
     dmu = max(dmu_min, dmu);
@@ -63,8 +66,9 @@ while mu > 0.0
     
     mu = max(0.0, mu); 
     
-    [Homo, dHdx, dHdmu] = obj_homo(x, mu, x0);    
-    normH = norm(Homo);  
+    [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
+    
+    normH = norm(K1);  
     inner_tol = normH*0.01;
     
     x_p0 = x;     
@@ -73,9 +77,10 @@ while mu > 0.0
         inner_iter = inner_iter + 1; 
         dx = -dHdx\Homo;
         
-        x = x + dx;
-        [Homo, dHdx, dHdmu] = obj_homo(x, mu, x0);    
-        normH = norm(Homo); 
+        x = x + dx(1:length(x));
+        lam = lam + dx(length(x)+1:end); 
+        [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
+        normH = norm(K1); 
      end       
 end
 x
@@ -83,7 +88,7 @@ outer_iter
 end
 
 
-function [Homo, dHdx, dHdmu] = obj_homo(x, lam, mu, x0, b0, c0)
+function [Homo, dHdx, dHdmu, K_1] = obj_homo(x, lam, mu, x0, b0, c0)
 
 [f, g, h] = objfun(x);
 Df = g; 
@@ -100,13 +105,17 @@ K_2 = -abs( ineq - lam ).^3 + ineq.*3 + lam.^3 - mu.*c0;
 Homo = [K_1;
         K_2]; 
 
-% ------------- calculating gradient --------------    
-dCubicdX = 3.* ( -Gcineq  ) * (ineq - lam).^2; 
-dCubicdmu = 3.* b0 .* (ineq - lam).^2; 
+% ------------- calculating gradient --------------  
+square_ineq_lam = (ineq - lam).^2; 
+dCubicdX = 3.* ( -Gcineq  ) * diag(square_ineq_lam); 
+dCubicdmu = 3.* b0 .* square_ineq_lam; 
+dCubicdlam = 3.*(-eye(length(lam))) * diag(square_ineq_lam);
+
 ind = ineq < lam;
 if any(ind)
    dCubicdX(ind) = -dCubicdX(ind); 
    dCubicdmu(ind) = -dCubicdmu(ind); 
+   dCubicdlam(ind) = -dCubicdlam(ind); 
 end
 
 hess_lag = h; 
@@ -116,13 +125,17 @@ end
 
 
 dK1dx = (1-mu).*hess_lag + mu.*eye(length(x)); 
-dK2dx = -dCubicdX + 3.*(-Gcineq)*(ineq).^2; 
-dHdx = [dK1dx, dK2dx]; 
+dK2dx = -dCubicdX + 3.*(-Gcineq)* diag((ineq).^2); 
+dK1dlam = (1-mu).*Gcineq; 
+dK2dlam = -dCubicdlam + diag(3.*lam.^2); 
+
+dHdx = [dK1dx, dK1dlam;
+        dK2dx, dK2dlam]; 
     
 dK1dmu = -grad_lag + (x-x0); 
 dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0; 
     
-dHdmu = [dK1dmu, dK2dmu];  
+dHdmu = [dK1dmu; dK2dmu];  
 
 end  
 
