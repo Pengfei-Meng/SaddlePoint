@@ -5,16 +5,16 @@ function nonneg_constrained()
 % ------- parameters setting --------
 % Rosenbrock:    f_size_max=2;   delta_bar = 1;   phi_bar = 7/180*pi;  
 f_size_min = 0.05;         % outer: 100,  inner: 1000
-f_size_max = 5;                
+f_size_max = 2;                
 dmu_min = -0.9; 
 dmu_max = -0.01; 
-delta_bar = 4;                 % simpler problem, large delta_bar
-phi_bar = 7/180*pi;            
+delta_bar = 1;                 % simpler problem, large delta_bar
+phi_bar = 5/180*pi;            
 
 x = [4;4];
-lam = [1;1];
-mu = 1.0;
-x0 = [4;4]; 
+lam = [1;1];                   % two inequality constraints
+mu = 1.0;                      % mu: 1 -> 0
+x0 = [3;3]; 
 % ---------- looking for b0, c0 ----------
 [f,g,h] = objfun(x0);
 [cineq, Gcineq, Hcineq] = confun(x0); 
