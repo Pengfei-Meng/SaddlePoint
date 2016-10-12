@@ -107,8 +107,8 @@ dK1dmu = -grad_lag + (x-x0);    % barrier parameter
 
 % K_2 block
 
-ineq = mu.*b0 - g; 
-K_2 = -abs( ineq - lam ).^3 + ineq.*3 + lam.^3 - mu.*c0; 
+Q = mu.*b0 - g; 
+K_2 = -abs( Q - lam ).^3 + Q.*3 + lam.^3 - mu.*c0; 
 
 %% 1) dCubic w.r.t. x, lam, mu
 % square_ineq_lam = 3.*(ineq - lam).^2; 
@@ -129,41 +129,45 @@ K_2 = -abs( ineq - lam ).^3 + ineq.*3 + lam.^3 - mu.*c0;
 % dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0; 
 
 %---------------- dK2dx, dK2dlam, dK2dmu --------------
-% a: mu.*b0 - g; 
-% b: lam
+% Q: mu.*b0 - g; 
+% lam: multipliers
+
+coef1_6lQ = 6.*lam.*Q; 
+coef2_3l2 = 3.*lam.^2; 
+
+coef3_3Q2 = 3.*Q.^2; 
+coef4_6Q  = 6.*Q; 
+
 dK2dx = zeros(length(x), length(K_2));
 dK2dlam = zeros(length(K_2), length(K_2));
 dK2dmu = zeros(length(K_2), 1);
 
-ind_l = ineq >= lam;
+ind_l = Q >= lam;
 if any(ind_l)
-    coef1 = diag(3.*lam(ind_l).*2.*ineq(ind_l)); 
-    coef2 = diag(3.*lam(ind_l).^2); 
-    dK2dx(:,ind_l) = (-Dg(:,ind_l))*coef1 - (-Dg(:,ind_l))*coef2; 
+    dK2dx(:,ind_l) = (-Dg(:,ind_l))*diag(coef1_6lQ(ind_l)) - ...
+                     (-Dg(:,ind_l))*diag(coef2_3l2(ind_l)); 
     
-    coef31 = diag(3.*(ineq(ind_l)).^2); 
-    % coef32 = diag(6.*ineq(ind_l))*diag(lam(ind_l));
-    dK2dlam(ind_l,ind_l) = coef31 - coef1 + diag(6.*lam(ind_l).^2); 
-    
-    dK2dmu(ind_l) = coef1*b0(ind_l) - diag(3.*lam(ind_l).^2)*b0(ind_l) -...
-        c0(ind_l);
-    
+    dK2dmu(ind_l) = diag(coef1_6lQ(ind_l))*b0(ind_l) - ...
+                    diag(coef2_3l2(ind_l))*b0(ind_l) - c0(ind_l);
+        
+    dK2dlam(ind_l,ind_l) = diag(coef3_3Q2(ind_l)) - ...
+                           diag(coef4_6Q(ind_l).*lam(ind_l)) + ...
+                           diag(6.*lam(ind_l).^2); 
 end
 
-ind_s = ineq < lam; 
+ind_s = Q < lam; 
 if any(ind_s)
-    coef3 = diag(6.*ineq(ind_s).^2); 
-    coef4 = diag(3.*lam(ind_s).*2.*ineq(ind_s)); 
-    coef5 = diag(3.*lam(ind_s).^2); 
-    dK2dx(:,ind_s) = (-Dg(:,ind_s))*coef3 - ...
-        (-Dg(:,ind_s))*coef4 + (-Dg(:,ind_s))*coef5; 
-    
-    coef41 = diag(3.*(ineq(ind_s)).^2); 
-    coef42 = diag(6.*ineq(ind_s));
-    dK2dlam(ind_s, ind_s) = -coef41 + coef42*diag(lam(ind_s));
-    
-    dK2dmu(ind_s) = coef3*b0(ind_s) - coef4*b0(ind_s) + ...
-        coef5*b0(ind_s) - c0(ind_s);
+    dK2dx(:,ind_s) = (-Dg(:,ind_s))*diag(2.*coef3_3Q2(ind_s)) - ...
+                     (-Dg(:,ind_s))*diag(coef1_6lQ(ind_s)) + ...
+                     (-Dg(:,ind_s))*diag(coef2_3l2(ind_s)); 
+                 
+    dK2dmu(ind_s) = diag(2.*coef3_3Q2(ind_s))*b0(ind_s) - ...
+                    diag(coef1_6lQ(ind_s))*b0(ind_s) + ...
+                    diag(coef2_3l2(ind_s))*b0(ind_s) - c0(ind_s);
+                                 
+    dK2dlam(ind_s, ind_s) = -diag(coef3_3Q2(ind_s)) + ...
+                             diag(coef4_6Q(ind_s).*lam(ind_s)); 
+        
 end
 
 
@@ -174,8 +178,9 @@ Homo = [K_1;
 dK2dx = dK2dx'; 
 dHdx = [dK1dx, dK1dlam;
         dK2dx, dK2dlam]; 
-    
-if cond(dHdx) > 1e9
+
+cond(dHdx)
+if cond(dHdx) > 1e12
    sprintf('condition number too high! %e', cond(dHdx))
    x
    lam
