@@ -31,8 +31,58 @@ while mu > 0.0
      outer_iter = outer_iter + 1; 
      % predictor direction
      [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0); 
+         dxdmu = dHdx \ dHdmu;
+    tau = [dxdmu; -1];    
+    t = tau./norm(tau);             % normalized Newton step
+  
+    if outer_iter > 1
+        % step length calculation
+        delta = norm(x - x_p0); 
+        phi = acos(t'*tsave); 
+        
+        f_size = max(sqrt(delta/delta_bar), phi/phi_bar); 
+        f_size = max(f_size_min, f_size); 
+        f_size = min(f_size_max, f_size); 
+        step_size = step_size/f_size; 
+
+        if f_size >= f_size_max
+            x = xsave; 
+            t = tsave; 
+            lam = lamsave; 
+        end        
+    end
+    
+    tsave = t; 
+    xsave = x; 
+    lamsave = lam; 
+    
+    x = x + step_size.*t(1:length(x));
+    lam = lam + step_size.*t(length(x)+1:end-1);
+    
+    dmu = step_size.*t(end); 
+    dmu = max(dmu_min, dmu);
+    dmu = min(dmu_max, dmu);    
+    mu = mu + dmu; 
+    
+    mu = max(0.0, mu); 
+    
+    [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
+    
+    normH = norm(K1);  
+    inner_tol = normH*0.01;
+    
+    x_p0 = x;     
      
-     
+    % corrector
+    while normH > inner_tol 
+        inner_iter = inner_iter + 1; 
+        dx = -dHdx\Homo;
+        
+        x = x + dx(1:length(x));
+        lam = lam + dx(length(x)+1:end); 
+        [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
+        normH = norm(K1); 
+    end          
 end
 
 
@@ -64,16 +114,16 @@ ineq = mu.*b0 - g;
 K_2 = -abs( ineq - lam ).^3 + ineq.*3 + lam.^3 - mu.*c0; 
 
 % 1) dCubic w.r.t. x, lam, mu
-square_ineq_lam = (ineq - lam).^2; 
-dCubicdX = 3.* ( -Dg  ) * diag(square_ineq_lam); 
-dCubicdmu = 3.* b0 .* square_ineq_lam; 
-dCubicdlam = 3.*(-eye(length(lam))) * diag(square_ineq_lam);
+square_ineq_lam = 3.*(ineq - lam).^2; 
+dCubicdX = ( -Dg  ) * diag(square_ineq_lam); 
+dCubicdmu = b0 .* square_ineq_lam; 
+dCubicdlam = (-eye(length(lam))) * diag(square_ineq_lam);
 
 ind = ineq < lam;
 if any(ind)
    dCubicdX(ind) = -dCubicdX(ind); 
-   dCubicdmu(ind) = -dCubicdmu(ind); 
    dCubicdlam(ind) = -dCubicdlam(ind); 
+   dCubicdmu(ind) = -dCubicdmu(ind); 
 end
 
 % 2) assemble dCubic into dK2
@@ -84,28 +134,12 @@ dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0;
 Homo = [K_1;
         K_2]; 
 
-
-
-
-
-
-
-dK1dx = (1-mu).*hess_lag + mu.*eye(length(x)); 
-dK2dx = -dCubicdX + 3.*(-Dg)* diag((ineq).^2); 
-dK1dlam = (1-mu).*Dg; 
-dK2dlam = -dCubicdlam + diag(3.*lam.^2); 
-
 dHdx = [dK1dx, dK1dlam;
         dK2dx, dK2dlam]; 
-    
-dK1dmu = -grad_lag + (x-x0); 
-dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0; 
-    
-dHdmu = [dK1dmu; dK2dmu];  
+
+dHdmu = [dK1dmu; dK2dmu];   
 
 end  
-
-
 
 
 function [x0,b0,c0] = select_initials(n,m)
