@@ -1,8 +1,5 @@
 function nonlinear_constrained()
-% min exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
-% s.t. g = cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
-%                   -x(1)*x(2) - 10];  
-% g = cineq <= 0
+
 
 f_size_min = 0.05;             
 f_size_max = 2;                
@@ -13,12 +10,12 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-x = [4;4];           %   starting point
-lam = [1;1];
+x = [1;1;1;1];           %   starting point
 
-n = 2;      % number of design
-m = 2;      % number of constraints
+n = 4;      % number of design
+m = 3;      % number of constraints
 [x0,b0,c0] = select_initials(n,m); 
+lam = 0.1.*ones(m,1);
 a = x0; 
 
 % solving the Cubic homotopy using hometopy continuation 
@@ -113,35 +110,86 @@ dK1dmu = -grad_lag + (x-x0);    % barrier parameter
 ineq = mu.*b0 - g; 
 K_2 = -abs( ineq - lam ).^3 + ineq.*3 + lam.^3 - mu.*c0; 
 
-% 1) dCubic w.r.t. x, lam, mu
-square_ineq_lam = 3.*(ineq - lam).^2; 
-dCubicdX = ( -Dg  ) * diag(square_ineq_lam); 
-dCubicdmu = b0 .* square_ineq_lam; 
-dCubicdlam = (-eye(length(lam))) * diag(square_ineq_lam);
+%% 1) dCubic w.r.t. x, lam, mu
+% square_ineq_lam = 3.*(ineq - lam).^2; 
+% dCubicdX = ( -Dg  ) * diag(square_ineq_lam); 
+% dCubicdmu = b0 .* square_ineq_lam; 
+% dCubicdlam = (-eye(length(lam))) * diag(square_ineq_lam);
+% 
+% ind = ineq < lam;
+% if any(ind)
+%    dCubicdX(ind) = -dCubicdX(ind); 
+%    dCubicdlam(ind) = -dCubicdlam(ind); 
+%    dCubicdmu(ind) = -dCubicdmu(ind); 
+% end
+% 
+% % 2) assemble dCubic into dK2
+% dK2dx = -dCubicdX + 3.*(-Dg)* diag((ineq).^2); 
+% dK2dlam = -dCubicdlam + diag(3.*lam.^2); 
+% dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0; 
 
-ind = ineq < lam;
-if any(ind)
-   dCubicdX(ind) = -dCubicdX(ind); 
-   dCubicdlam(ind) = -dCubicdlam(ind); 
-   dCubicdmu(ind) = -dCubicdmu(ind); 
+%---------------- dK2dx, dK2dlam, dK2dmu --------------
+% a: mu.*b0 - g; 
+% b: lam
+dK2dx = zeros(length(x), length(K_2));
+dK2dlam = zeros(length(K_2), length(K_2));
+dK2dmu = zeros(length(K_2), 1);
+
+ind_l = ineq >= lam;
+if any(ind_l)
+    coef1 = diag(3.*lam(ind_l).*2.*ineq(ind_l)); 
+    coef2 = diag(3.*lam(ind_l).^2); 
+    dK2dx(:,ind_l) = (-Dg(:,ind_l))*coef1 - (-Dg(:,ind_l))*coef2; 
+    
+    coef31 = diag(3.*(ineq(ind_l)).^2); 
+    % coef32 = diag(6.*ineq(ind_l))*diag(lam(ind_l));
+    dK2dlam(ind_l,ind_l) = coef31 - coef1 + diag(6.*lam(ind_l).^2); 
+    
+    dK2dmu(ind_l) = coef1*b0(ind_l) - diag(3.*lam(ind_l).^2)*b0(ind_l) -...
+        c0(ind_l);
+    
 end
 
-% 2) assemble dCubic into dK2
-dK2dx = -dCubicdX + 3.*(-Dg)* diag((ineq).^2); 
-dK2dlam = -dCubicdlam + diag(3.*lam.^2); 
-dK2dmu = -dCubicdmu + 3.* b0 .* (ineq).^2 - c0; 
+ind_s = ineq < lam; 
+if any(ind_s)
+    coef3 = diag(6.*ineq(ind_s).^2); 
+    coef4 = diag(3.*lam(ind_s).*2.*ineq(ind_s)); 
+    coef5 = diag(3.*lam(ind_s).^2); 
+    dK2dx(:,ind_s) = (-Dg(:,ind_s))*coef3 - ...
+        (-Dg(:,ind_s))*coef4 + (-Dg(:,ind_s))*coef5; 
+    
+    coef41 = diag(3.*(ineq(ind_s)).^2); 
+    coef42 = diag(6.*ineq(ind_s));
+    dK2dlam(ind_s, ind_s) = -coef41 + coef42*diag(lam(ind_s));
+    
+    dK2dmu(ind_s) = coef3*b0(ind_s) - coef4*b0(ind_s) + ...
+        coef5*b0(ind_s) - c0(ind_s);
+end
 
+
+%------------------------------------------------------
 Homo = [K_1;
         K_2]; 
 
+dK2dx = dK2dx'; 
 dHdx = [dK1dx, dK1dlam;
         dK2dx, dK2dlam]; 
+    
+if cond(dHdx) > 1e9
+   sprintf('condition number too high! %e', cond(dHdx))
+   x
+   lam
+   pause 
+end
 
 dHdmu = [dK1dmu; dK2dmu];   
 
 end  
 
 
+
+
+%{
 function [x0,b0,c0] = select_initials(n,m)
 % rules                              dimension
 % x0 : arbitrary                     n 
@@ -155,6 +203,10 @@ end
 
 function [f,g,h] = objfun(x)
 % A more complex case, only inequality constraints
+% min exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
+% s.t. g = cineq = [1.5 + x(1)*x(2) - x(1) - x(2);     
+%                   -x(1)*x(2) - 10];  
+% g = cineq <= 0
 % solution
 % x = [-9.5473    1.0474]
 % f = 0.0236
@@ -187,4 +239,67 @@ Hcineq = cell(1, length(cineq));
 Hcineq{1} = [0,1;1,0];
 Hcineq{2} = [0,-1;-1,0];
 
+end
+%}
+
+function [x0,b0,c0] = select_initials(n,m)
+% rules                              dimension
+% x0 : arbitrary                     n 
+% b0 : b0 > 0,   g(x0) - b0 <= 0     m
+% c0 : c0 > 0                        m
+x0 = [-1; -1; -1; -1];     % so that cineq < 0 
+[cineq, Gcineq, Hcineq] = confun(x0); 
+b0 = 0.5.*ones(m,1); 
+c0 = 0.5.*ones(m,1);
+end
+
+function [f,g,h] = objfun(x)
+%  Rosen-Suzuki Problem
+%  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4
+%  s.t. 8  - x1^2 -   x2^2 - x3^2 -   x4^2 -   x1 + x2 - x3 + x4 >= 0 
+%       10 - x1^2 - 2*x2^2 - x3^2 - 2*x4^2 +   x1           + x4 >= 0          
+%       5- 2*x1^2 -   x2^2 - x3^2          - 2*x1 + x2      + x4 >= 0            
+%  Initial Point x = [1,1,1,1];   
+%  Solution at   x = [0,1,2,-1]; 
+%                f = -44   
+%  Common wrong solution x = [2.5000, 2.5000, 5.2500, -3.5000]
+%                        f = -79.8750
+f = x(1)^2 + x(2)^2 + 2*x(3)^2 + x(4)^2 -5*x(1) -5*x(2)-21*x(3) + 7*x(4); 
+
+% its derivative wrt. x
+g = zeros(4,1); 
+g(1)= 2*x(1)-5;
+g(2)= 2*x(2)-5;
+g(3)= 4*x(3)-21;
+g(4)= 2*x(4)+7; 
+
+h = diag([2,2,4,2]);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [cineq, Gcineq, Hcineq]= confun(x)
+% Constraint function
+cineq = zeros(3,1);
+cineq(1) = 8 - x(1)^2 -  x(2)^2-x(3)^2 - x(4)^2 - x(1) + x(2) - x(3) + x(4); 
+cineq(2) = 10- x(1)^2 -2*x(2)^2-x(3)^2 - 2*x(4)^2 +   x(1)  + x(4)         ;
+cineq(3) = 5-2*x(1)^2 -  x(2)^2-x(3)^2          - 2*x(1) + x(2)      + x(4);  
+
+% Gradients of the constraint functions wrt. x
+Gcineq=[-2*x(1)-1, -2*x(2)+1, -2*x(3)-1, -2*x(4)+1; 
+       -2*x(1)+1, -4*x(2),   -2*x(3),   -4*x(4)+1;
+       -4*x(1)-2, -2*x(2)+1, -2*x(3),   1];
+Gcineq = Gcineq'; 
+
+Hcineq = cell(1, length(cineq)); 
+Hcineq{1} = diag([-2, -2, -2, -2]);
+Hcineq{2} = diag([-2, -4, -2, -4]);
+Hcineq{3} = diag([-4, -2, -2,  0]);
+
+% % if fmincon, or the interior points on paper:   c<0
+cineq = -cineq;
+Gcineq = -Gcineq; 
+Hcineq{1} = -1.*Hcineq{1}; 
+Hcineq{2} = -1.*Hcineq{2};
+Hcineq{3} = -1.*Hcineq{3};
 end
