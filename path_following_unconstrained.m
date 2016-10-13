@@ -4,7 +4,7 @@ n = 2;
 x = [0;0];
 
 mu = 1.0;
-x0 = [-5;-1]; 
+x0 = [-1;-1]; 
  
 % ------- parameters setting --------
 % Rosenbrock:    f_size_max=2;   delta_bar = 1;   phi_bar = 7/180*pi;  
@@ -21,7 +21,7 @@ phi_bar = 7/180*pi;               % can be manipulated here
 residual = (1-mu).*g + mu.*(x-x0);
 
 norm0 = norm(g);
-outer_tol = norm0*1e-15; 
+outer_tol = norm0*1e-6; 
 step_size = 0.05;                 % norm(x0)  %2.0; 
 
 iter = 0; 
