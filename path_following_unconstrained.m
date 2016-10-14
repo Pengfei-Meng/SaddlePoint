@@ -132,6 +132,7 @@ end
  
 
 function [f, g, h] = objfun(x)
+% Rosenbrock function
 % solution x=[1,1], f = 0; 
 f = 100*(x(1)^2 - x(2))^2 + (x(1)-1)^2;
 
