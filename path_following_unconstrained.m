@@ -1,4 +1,5 @@
 function path_following_unconstrained()
+% working fine for unconstrained rosenbrock problem
 
 n = 2;
 x = [0;0];

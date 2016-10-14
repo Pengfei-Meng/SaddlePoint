@@ -4,7 +4,7 @@ function nonlinear_constrained2()
 % "Optim Eng(2009) 10:91-108"
 
 f_size_min = 0.05;             
-f_size_max = 2;                
+f_size_max = 5;                
 dmu_min = -0.9; 
 dmu_max = -0.01; 
 delta_bar = 1;                 % simpler problem, large delta_bar
@@ -41,7 +41,7 @@ while mu > 0.0
         delta = norm(x - x_p0); 
         phi = acos(t'*tsave); 
         
-        f_size = max(sqrt(delta/delta_bar), phi/phi_bar); 
+        f_size = max(sqrt(delta/delta_bar), phi/phi_bar) 
         f_size = max(f_size_min, f_size); 
         f_size = min(f_size_max, f_size); 
         step_size = step_size/f_size; 
@@ -50,16 +50,16 @@ while mu > 0.0
             sprintf('backtracking')
             x = xsave; 
             t = tsave; 
-            % lam = lamsave; 
+            lam = lamsave; 
         end        
     end
     
     tsave = t; 
     xsave = x; 
-    % lamsave = lam; 
+    lamsave = lam; 
     
     x = x + step_size.*t(1:length(x));
-    % lam = lam + step_size.*t(length(x)+1:end-1);
+    lam = lam + step_size.*t(length(x)+1:end-1);
     
     dmu = step_size.*t(end); 
     dmu = max(dmu_min, dmu);
@@ -69,10 +69,10 @@ while mu > 0.0
     mu = max(0.0, mu); 
     
     [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
-    lam = solve_lam(mu,x,b0,c0, lam);
+    % lam = solve_lam(mu,x,b0,c0, lam);
     
-    normH = norm(K1);  
-    inner_tol = normH*0.01;
+    normH = norm(K1)
+    inner_tol = normH*0.1
     
     x_p0 = x;     
      
@@ -82,9 +82,9 @@ while mu > 0.0
         dx = -dHdx\Homo;
         
         x = x + dx(1:length(x));
-        % lam = lam + dx(length(x)+1:end); 
+        lam = lam + dx(length(x)+1:end); 
         [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
-        normH = norm(K1); 
+        normH = norm(K1)
 
     end 
     
@@ -136,11 +136,11 @@ Homo = [K_1;
         K_2]; 
 
 dK2dx = dK2dx'; 
-% dHdx = [dK1dx, dK1dlam;
-%         dK2dx, dK2dlam]; 
+dHdx = [dK1dx, dK1dlam;
+        dK2dx, dK2dlam]; 
 
-dHdx = [dK1dx;
-        dK2dx]; 
+% dHdx = [dK1dx;
+%         dK2dx]; 
 
 % mu
 % b0

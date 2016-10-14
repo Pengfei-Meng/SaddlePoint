@@ -87,7 +87,7 @@ x
 outer_iter
 end
 
-
+%{
 function [Homo, dHdx, dHdmu, K_1] = obj_homo(x, lam, mu, x0, b0, c0)
 
 [f, g, h] = objfun(x);
@@ -174,6 +174,7 @@ Hcineq{1} = [0,1;1,0];
 Hcineq{2} = [0,-1;-1,0];
 
 end
+%}
 
 % if Df > x
 %     dCubicdX = 3.*(Df - x).^2' * (h - eye(length(x))); 
@@ -184,7 +185,7 @@ end
 %     pause
 % end
 
-%{
+
 
 function [Homo, dHdx, dHdmu] = obj_homo(x, mu, a)
 % 2D problem
@@ -227,7 +228,7 @@ g = [x(1)+1;
 h = [1,0; 0,1];  
 end
 
-%}
+
 
 %{
 function [Homo, dHdx, dHdmu] = obj_homo(x, mu, a)
