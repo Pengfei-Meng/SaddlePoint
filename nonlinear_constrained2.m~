@@ -12,10 +12,13 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-x = [1;1;1;1];
+x0 = [1;1;1;1];
+x = [0.5; 1; 0.5; 1];
 n = 4;      % number of design
 m = 3;      % number of constraints
-[x0,b0,c0,lam] = select_initials(n,m,x,mu); 
+[b0,c0] = select_initials(n,m,x0,mu); 
+lam = solve_lam(mu,x,b0,c0);
+
 a = x0; 
 
 % solving the Cubic homotopy using hometopy continuation 
@@ -81,7 +84,7 @@ while mu > 0.0
         [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
         normH = norm(K1); 
     end 
-    [x0,b0,c0,lam0] = select_initials(n,m,x,mu); 
+    % [x0,b0,c0,lam0] = select_initials(n,m,x,mu); 
     
 end
 
@@ -107,39 +110,21 @@ dK1dx = (1-mu).*hess_lag + mu.*eye(length(x));
 dK1dlam = (1-mu).*Dg;           % multipliers
 dK1dmu = -grad_lag + (x-x0);    % barrier parameter
 
-
 % K_2 block
 
 Q = mu.*b0 - g; 
 K_2 = -abs( Q - lam ).^3 + Q.*3 + lam.^3 - mu.*c0; 
 
 %% 1) dCubic w.r.t. x, lam, mu
-%---------------- dK2dx, dK2dlam, dK2dmu --------------
 % Q: mu.*b0 - g; 
 % lam: multipliers
 
-coef1_6lQ = 6.*lam.*Q; 
-coef2_3l2 = 3.*lam.^2; 
-
-coef3_3Q2 = 3.*Q.^2; 
-coef4_6Q  = 6.*Q; 
-
-dK2dx = zeros(length(x), length(K_2));
-dK2dlam = zeros(length(K_2), length(K_2));
-dK2dmu = zeros(length(K_2), 1);
-
 sign3 = sign(Q - lam);
+const = 3.*( Q - lam ).^2;  
 
-    dK2dx(:,ind_l) = (-Dg(:,ind_l))*diag(coef1_6lQ(ind_l)) - ...
-                     (-Dg(:,ind_l))*diag(coef2_3l2(ind_l)); 
-    
-    dK2dmu(ind_l) = diag(coef1_6lQ(ind_l))*b0(ind_l) - ...
-                    diag(coef2_3l2(ind_l))*b0(ind_l) - c0(ind_l);
-        
-    dK2dlam(ind_l,ind_l) = diag(coef3_3Q2(ind_l)) - ...
-                           diag(coef4_6Q(ind_l).*lam(ind_l)) + ...
-                           diag(6.*lam(ind_l).^2); 
-
+dK2dx = -(-Dg)*diag(const.*sign3) + (-Dg)*diag(3.*Q.^2);
+dK2dmu = diag(const.*sign3)*b0 - diag(3.*Q.^2)*b0 - c0;
+dK2dlam = diag(const.*sign3 + 3.*lam.^2);
 
 %------------------------------------------------------
 Homo = [K_1;
@@ -221,20 +206,29 @@ Hcineq{2} = [0,-1;-1,0];
 end
 %}
 
-function [x0,b0,c0,lam] = select_initials(n,m,x,mu)
+
+function lam = solve_lam(mu,x0,b0,c0)
+[g, Dg, Hg] = confun(x0);       
+Q = mu.*b0 - g; 
+
+lam = fsolve(@(x)-abs( Q - x ).^3 + Q.*3 + x.^3 - mu.*c0, 3, ...
+    'Algorithm',)
+ 
+% K_2 = -abs( Q - x ).^3 + Q.*3 + x.^3 - mu.*c0; 
+
+end
+
+function [b0,c0] = select_initials(n,m,x0,mu)
 % rules                              dimension
 % x0 : arbitrary                     n 
 % b0 : b0 > 0,   g(x0) - b0 <= 0     m
 % c0 : c0 > 0                        m
 % at mu = 1 initial, mu 1-> 0 
-x0 = x;     % so that cineq < 0 
+
 [cineq, Gcineq, Hcineq] = confun(x0); 
 b0 = cineq./mu + abs(cineq).*(0.1/max(mu,0.1)); 
 
-Q = mu*b0 - cineq; 
-lam = Q; 
-
-c0 = Q.^3 + lam.^3;
+c0 = ones(m,1);
 end
 
 function [f,g,h] = objfun(x)

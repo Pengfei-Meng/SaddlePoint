@@ -5,8 +5,8 @@
 % min  f(x)   s.t. x >= 0 
 
 function test_K_cubic()
-    c = 0;
-    x = fsolve(@(x) myfun(x,c),3)
+    c = -1;
+    x = fsolve(@(x) myfun(x,c),[-5;-5]);
 end
 
 function F = myfun(x,c)
@@ -16,6 +16,5 @@ end
 
 function [f,df] = objfun(c)
 % 1/2*(c+1)^2;
-f = 1/2*(c+1)^2;
-df = c+1; 
+f = 
 end

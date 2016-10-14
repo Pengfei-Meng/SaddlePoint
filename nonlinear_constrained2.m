@@ -16,10 +16,11 @@ x0 = [1;1;1;1];
 x = [0.5; 1; 0.5; 1];
 n = 4;      % number of design
 m = 3;      % number of constraints
-[b0,c0] = select_initials(n,m,x0,mu); 
-lam = solve_lam(mu,x,b0,c0);
+[b0,c0] = select_initials(n,m,x0,mu);
+lam0 = ones(m,1);
+lam = solve_lam(mu,x,b0,c0,lam0);
 
-a = x0; 
+% a = x0; 
 
 % solving the Cubic homotopy using hometopy continuation 
 % with mu 1 -> 0, the same method as in David Brown's paper
@@ -31,7 +32,7 @@ while mu > 0.0
      outer_iter = outer_iter + 1; 
      % predictor direction
      [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0); 
-         dxdmu = dHdx \ dHdmu;
+     dxdmu = dHdx \ dHdmu;
     tau = [dxdmu; -1];    
     t = tau./norm(tau);             % normalized Newton step
   
@@ -49,16 +50,16 @@ while mu > 0.0
             sprintf('backtracking')
             x = xsave; 
             t = tsave; 
-            lam = lamsave; 
+            % lam = lamsave; 
         end        
     end
     
     tsave = t; 
     xsave = x; 
-    lamsave = lam; 
+    % lamsave = lam; 
     
     x = x + step_size.*t(1:length(x));
-    lam = lam + step_size.*t(length(x)+1:end-1);
+    % lam = lam + step_size.*t(length(x)+1:end-1);
     
     dmu = step_size.*t(end); 
     dmu = max(dmu_min, dmu);
@@ -68,6 +69,7 @@ while mu > 0.0
     mu = max(0.0, mu); 
     
     [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
+    lam = solve_lam(mu,x,b0,c0, lam);
     
     normH = norm(K1);  
     inner_tol = normH*0.01;
@@ -80,10 +82,13 @@ while mu > 0.0
         dx = -dHdx\Homo;
         
         x = x + dx(1:length(x));
-        lam = lam + dx(length(x)+1:end); 
+        % lam = lam + dx(length(x)+1:end); 
         [Homo, dHdx, dHdmu, K1] = obj_homo(x, lam, mu, x0, b0, c0);
         normH = norm(K1); 
+
     end 
+    
+    lam = solve_lam(mu,x,b0,c0, lam);
     % [x0,b0,c0,lam0] = select_initials(n,m,x,mu); 
     
 end
@@ -131,13 +136,17 @@ Homo = [K_1;
         K_2]; 
 
 dK2dx = dK2dx'; 
-dHdx = [dK1dx, dK1dlam;
-        dK2dx, dK2dlam]; 
-mu
-b0
-g
-Q
-lam
+% dHdx = [dK1dx, dK1dlam;
+%         dK2dx, dK2dlam]; 
+
+dHdx = [dK1dx;
+        dK2dx]; 
+
+% mu
+% b0
+% g
+% Q
+% lam
 cond(dHdx)
 if cond(dHdx) > 1e12
    sprintf('condition number too high! %e', cond(dHdx))
@@ -207,11 +216,19 @@ end
 %}
 
 
-function lam = solve_lam(mu,x,b0,c0)
+function lam = solve_lam(mu,x0,b0,c0, lam0)
+[g, Dg, Hg] = confun(x0);       
+Q = mu.*b0 - g; 
 
-
-
+OPTIONS = optimoptions('fsolve','Algorithm','trust-region-reflective');
+lam = fsolve(@myfun, lam0, OPTIONS); 
+ 
+    function f = myfun(x)
+        f = -abs( Q - x ).^3 + Q.*3 + x.^3 - mu.*c0; 
+    end
 end
+
+
 
 function [b0,c0] = select_initials(n,m,x0,mu)
 % rules                              dimension
