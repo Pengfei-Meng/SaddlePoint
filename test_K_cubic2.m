@@ -1,7 +1,8 @@
 function test_K_cubic2()
 % test the cubic K function on linear constrained problems
 % min f(x)
-% s.t. Ax-b >= 0     lam < 0
+% s.t. -(Ax-b) <= 0     lam > 0
+% it is working right now! 
 
 f_size_min = 0.05;             
 f_size_max = 5;                
@@ -12,19 +13,28 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-x0 = [2; 2];       % x0, is critical
-lam0 = [-2;-2];
+x0 = [1; 1];       % x0, is critical
+lam0 = [0.1;0.1];
 x = [3; 3];   
-lam = [-4;-7];
+lam = [1; 1];
 
+K0 = obj_K(x,lam); 
+normK = norm(K0,Inf); 
+K0_tol = normK*1e-6; 
 % solving the Cubic homotopy using hometopy continuation 
 % with mu 1 -> 0, the same method as in David Brown's paper
 step_size = 0.05;               
 outer_iter = 0; 
 inner_iter = 0; 
 
-x_hist = [];
+x_hist = [];   lam_hist = []; 
 x_hist = [x_hist, x];
+lam_hist = [lam_hist, lam]; 
+figure('Name', 'Lam Path')
+hold on 
+scatter(x(1), x(2),[],'filled')
+% scatter(lam(1), lam(2),[],'filled')
+
 
 while mu > 0.0
      outer_iter = outer_iter + 1; 
@@ -50,12 +60,12 @@ while mu > 0.0
         f_size = min(f_size_max, f_size); 
         step_size = step_size/f_size; 
 
-        if f_size >= f_size_max
-            sprintf('backtracking')
-            x = xsave; 
-            t = tsave; 
-            lam = lamsave; 
-        end        
+%         if f_size >= f_size_max
+%             sprintf('backtracking')
+%             x = xsave; 
+%             t = tsave; 
+%             lam = lamsave; 
+%         end        
     end
     
     tsave = t; 
@@ -81,7 +91,9 @@ while mu > 0.0
     x_p0 = x;     
      
     % corrector
-    while normH > inner_tol 
+    newton_iter = 0; 
+    while (normH > inner_tol) && (newton_iter < 20)
+        newton_iter = newton_iter + 1; 
         inner_iter = inner_iter + 1; 
         dx = -dHdx\Homo;
         % dx = -gmres(dHdx, Homo);
@@ -92,18 +104,40 @@ while mu > 0.0
         normH = norm(Homo);
     end 
     
-    x_hist = [x_hist, x];
+    K = obj_K(x,lam); 
+    normK = norm(K,Inf); 
+
+    if normK < K0_tol
+        break
+    end
     
+    x_hist = [x_hist, x];
+    lam_hist = [lam_hist, lam]; 
+    hold on 
+    scatter(x(1), x(2),[],'filled')
+    
+    % scatter(lam(1), lam(2),[],'filled')
     % updating a is not helping here... 
     
 end
 
-c = linspace(1,10,size(x_hist,2));
-scatter(x_hist(1,:), x_hist(2,:), [],c,'filled')
+% c = linspace(1,10,size(x_hist,2));
+% scatter(x_hist(1,:), x_hist(2,:), [],c,'filled')
 x
 mu
 outer_iter
 inner_iter
+end
+
+function K = obj_K(x,lam)
+[f, df, hf] = objfun(x);
+[g, dg, hg] = confun(x); 
+
+lag_grad = df + dg*lam; 
+K = -abs(g - lam).^3 + g.^3 + lam.^3;
+
+K = [lag_grad;
+           K]; 
 end
 
 function [Homo, dHdxl, dHdmu] = obj_homo(x, lam, mu, x0, lam0)
@@ -124,9 +158,9 @@ dK1dx = (1-mu).*lag_hess + mu.*eye(length(x));
 dK1dlam = (1-mu).*dg; 
 dK1dmu = -lag_grad + (x-x0);
 
-K = -abs(g + lam).^3 + g.^3 - lam.^3; 
-dKdx = -dg*diag(3.*(g+lam).^2 .*sign(g-lam)) + dg*diag(3.*g.^2); 
-dKdlam =   diag(3.*(g+lam).^2 .*sign(g-lam)) - diag(3.*lam.^2);
+K = -abs(g - lam).^3 + g.^3 + lam.^3; 
+dKdx = -dg*diag(3.*(g-lam).^2 .*sign(g-lam)) + dg*diag(3.*g.^2); 
+dKdlam =  diag(3.*(g-lam).^2 .*sign(g-lam)) + diag(3.*lam.^2);
 
 K2 = (1-mu).*K + mu.*(lam - lam0);
 
@@ -141,8 +175,47 @@ dHdxl = [dK1dx, dK1dlam;
          dK2dx, dK2dlam];
 dHdmu = [dK1dmu;
          dK2dmu]; 
-
 end
+
+
+function [Homo, dHdxl, dHdmu] = obj_homo_repair(x, lam, mu, x0, lam0)
+% for the simple problem
+% K = - |df(x) - x| + df^3 + x^3 = 0; 
+
+[f, df, hf] = objfun(x);
+[g, dg, hg] = confun(x); 
+
+lag_grad = df + dg*lam; 
+lag_hess = hf; 
+for j = 1:length(g)
+    lag_hess = lag_hess + lam(j).*hg{j};
+end
+
+K1 = (1-mu).*lag_grad + mu.*(x-x0);
+dK1dx = (1-mu).*lag_hess + mu.*eye(length(x));
+dK1dlam = (1-mu).*dg; 
+dK1dmu = -lag_grad + (x-x0);
+
+K = -abs(g - lam).^3 + g.^3 + lam.^3; 
+dKdx = -dg*diag(3.*(g-lam).^2 .*sign(g-lam)) + dg*diag(3.*g.^2); 
+dKdlam =  diag(3.*(g-lam).^2 .*sign(g-lam)) + diag(3.*lam.^2);
+
+K2 = (1-mu).*K + mu.*(lam - lam0);
+
+dK2dx = (1-mu).*dKdx ; 
+dK2dlam = (1-mu).*dKdlam  + mu.*eye(length(lam));
+dK2dmu = -K + (lam - lam0);
+
+
+Homo = [K1;
+        K2];    
+dHdxl = [dK1dx, dK1dlam;
+         dK2dx, dK2dlam];
+dHdmu = [dK1dmu;
+         dK2dmu]; 
+end
+
+
 
 function [f,df,hf] = objfun(x)
 % note: the constraint x >= 0 is assimilated into func: obj_homo
@@ -172,12 +245,17 @@ hf = [1,0;
 end
 
 function [g, dg, hg] = confun(x)
+% x0 = [0.8; 0.9];       % x0, is critical
+% lam0 = [0.1;0.1];
+% x = [4; 3];   
+% lam = [1; 1];
+
 A = [2,0;
      0,3];
 b = [1;1];
 
-g = A*x - b; 
-dg = A; 
+g = -(A*x - b); 
+dg = -A; 
 hg = cell(1, length(g)); 
 hg{1} = zeros(length(x));
 hg{2} = zeros(length(x));
