@@ -17,9 +17,9 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-x0 = [1;2];       % x0, is critical
+x0 = [0.6; 4];       % x0, is critical
 a = x0; 
-x = [4; -7];       
+x = [2; 2]; 
 
 % solving the Cubic homotopy using hometopy continuation 
 % with mu 1 -> 0, the same method as in David Brown's paper
@@ -38,9 +38,9 @@ while mu > 0.0
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, mu, a); 
      
-     if norm(Homo) < 1e-5
-         break
-     end
+%      if norm(Homo) < 1e-6
+%          break
+%      end
      
      % dxdmu = gmres(dHdx, dHdmu);
      dxdmu = dHdx \ dHdmu;
