@@ -2,7 +2,6 @@ function test_K_cubic3()
 % test the cubic K function on linear constrained problems
 % min f(x)
 % s.t. -(Ax-b) <= 0     lam > 0
-% it is working right now! 
 
 f_size_min = 0.05;             
 f_size_max = 5;                
@@ -14,13 +13,16 @@ phi_bar = 5/180*pi;
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
 x0 = [1; 1];           
-s0 = [3; 3]; 
+s0 = [2; 2]; 
 lam0 = [0.1;0.1];
 x = [3; 3];  
 s = [5; 5]; 
 lam = [1; 1];
 
-K0 = obj_K(x,s,lam); 
+nx = length(x);
+ns = length(s); 
+
+K0 = obj_K(x,s,lam, mu); 
 normK = norm(K0,Inf); 
 K0_tol = normK*1e-6; 
 % solving the Cubic homotopy using hometopy continuation 
@@ -74,8 +76,9 @@ while mu > 0.0
     xsave = x; 
     lamsave = lam; 
     
-    x = x + step_size.*t(1:length(x));
-    lam = lam + step_size.*t(length(x)+1:end-1);
+    x = x + step_size.*t(1:nx);
+    s = s + step_size.*t(nx+1:nx+ns);
+    lam = lam + step_size.*t(nx+ns+1:end-1);
     
     dmu = step_size.*t(end); 
     dmu = max(dmu_min, dmu);
@@ -84,7 +87,7 @@ while mu > 0.0
     
     mu = max(0.0, mu); 
     
-    [Homo, dHdx, dHdmu] = obj_homo(x, lam, mu, x0, lam0);
+    [Homo, dHdx, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0); 
     % lam = solve_lam(mu,x,b0,c0, lam);
     
     normH = norm(Homo);
@@ -99,14 +102,15 @@ while mu > 0.0
         inner_iter = inner_iter + 1; 
         dx = -dHdx\Homo;
         % dx = -gmres(dHdx, Homo);
-        x = x + dx(1:length(x));
-        lam = lam + step_size.*t(length(x)+1:end-1);
-        
-        [Homo, dHdx, dHdmu] = obj_homo(x, lam, mu, x0, lam0);
+        x = x + dx(1:nx);
+        s = s + dx(nx+1:nx+ns); 
+        lam = lam + dx(nx+ns+1:end); 
+                
+        [Homo, dHdx, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0); 
         normH = norm(Homo);
     end 
     
-    K = obj_K(x,lam); 
+    K = obj_K(x,s,lam, mu); 
     normK = norm(K,Inf); 
 
     if normK < K0_tol
@@ -131,18 +135,19 @@ outer_iter
 inner_iter
 end
 
-function K = obj_K(x,lam)
+function K = obj_K(x, s, lam, mu)
 [f, df, hf] = objfun(x);
 [g, dg, hg] = confun(x); 
 
 lag_grad = df + dg*lam; 
-K = -abs(g - lam).^3 + g.^3 + lam.^3;
 
+e = ones(size(lam)); 
 K = [lag_grad;
-           K]; 
+     s.*lam - mu.*e; 
+     g + s]; 
 end
 
-function [Homo, dHdxl, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0)
+function [Homo, dHdxsl, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0)
 % for the simple problem
 % K = - |df(x) - x| + df^3 + x^3 = 0; 
 
@@ -157,30 +162,32 @@ end
 
 K1 = (1-mu).*lag_grad + mu.*(x-x0);
 dK1dx = (1-mu).*lag_hess + mu.*eye(length(x));
+dK1ds = zeros(length(K1), length(s));
 dK1dlam = (1-mu).*dg; 
 dK1dmu = -lag_grad + (x-x0);
 
 e = ones(size(lam)); 
 K2 = (1-mu).*(s.*lam - mu.*e) + mu.*(s-s0); 
-dK2dx 
-
+dK2dx = zeros(length(lam), length(x));
+dK2ds = (1-mu).*diag(lam./s) + mu.*eye(length(s));
+dK2dlam = (1-mu).*eye(length(K2));     
+dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0); 
 
 K3 = (1-mu).*(g+s) + mu.*(lam - lam0); 
-
-
-
-
-dK2dx = (1-mu).*dKdx ; 
-dK2dlam = (1-mu).*dKdlam  + mu.*eye(length(lam));
-dK2dmu = -K + (lam - lam0);
-
+dK3dx = (1-mu).*dg; 
+dK3ds = (1-mu).*eye(length(K3)); 
+dK3dlam = mu.*eye(length(lam)); 
+dK3dmu = -(g+s) + (lam-lam0); 
 
 Homo = [K1;
-        K2];    
-dHdxl = [dK1dx, dK1dlam;
-         dK2dx, dK2dlam];
+        K2;
+        K3];    
+dHdxsl = [dK1dx, dK1ds, dK1dlam;
+          dK2dx, dK2ds, dK2dlam; 
+          dK3dx, dK3ds, dK3dlam];
 dHdmu = [dK1dmu;
-         dK2dmu]; 
+         dK2dmu
+         dK3dmu]; 
 end
 
 function [f,df,hf] = objfun(x)
