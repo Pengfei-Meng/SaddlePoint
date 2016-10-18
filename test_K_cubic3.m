@@ -19,6 +19,14 @@ x = [3; 3];
 s = [5; 5]; 
 lam = [1; 1];
 
+
+% x0 = [0.1;0.1;0.1;0.1];
+% s0 = [0.8;0.8;0.8];
+% lam0 = [0.1;0.1;0.1];
+% x = [1;1;1;1];     
+% s = [1;1;1]; 
+% lam = ones(3,1);
+
 nx = length(x);
 ns = length(s); 
 
@@ -42,6 +50,7 @@ scatter(x(1), x(2),[],'filled')
 
 while mu > 0.0
      outer_iter = outer_iter + 1; 
+     s
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0); 
      
@@ -160,11 +169,11 @@ for j = 1:length(g)
     lag_hess = lag_hess + lam(j).*hg{j};
 end
 
-K1 = (1-mu).*lag_grad - mu.*(x-x0);
-dK1dx = (1-mu).*lag_hess - mu.*eye(length(x));
+K1 = (1-mu).*lag_grad + mu.*(x-x0);
+dK1dx = (1-mu).*lag_hess + mu.*eye(length(x));
 dK1ds = zeros(length(K1), length(s));
 dK1dlam = (1-mu).*dg; 
-dK1dmu = -lag_grad - (x-x0);
+dK1dmu = -lag_grad + (x-x0);
 
 e = ones(size(lam)); 
 % K2 = (1-mu).*(s.*lam - mu.*e) + mu.*(s-s0); 
@@ -172,18 +181,18 @@ e = ones(size(lam));
 % dK2dlam = (1-mu).*eye(length(K2));
 % dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0); 
 
-K2 = (1-mu).*(s.*lam) - mu.*(s-s0); 
+K2 = (1-mu).*(s.*lam) + mu.*(s-s0); 
 dK2dx = zeros(length(lam), length(x));
-dK2ds = (1-mu).*diag(lam) - mu.*eye(length(s)); 
-dK2dlam = (1-mu).*diag(s); 
-dK2dmu = -s.*lam - (s-s0); 
+dK2ds = (1-mu).*diag(lam) + mu.*eye(length(s)); 
+dK2dlam = (1-mu).*diag(s);   %    eye(length(K1)); %diag(s); 
+dK2dmu = -s.*lam + (s-s0); 
 
 
-K3 = (1-mu).*(g+s) - mu.*(lam - lam0); 
-dK3dx = (1-mu).*dg; 
+K3 = (1-mu).*(g+s) + mu.*(lam - lam0); 
+dK3dx = (1-mu).*dg'; 
 dK3ds = (1-mu).*eye(length(K3)); 
-dK3dlam = mu.*eye(length(lam)); 
-dK3dmu = -(g+s) - (lam-lam0); 
+dK3dlam = +mu.*eye(length(lam)); 
+dK3dmu = -(g+s) + (lam-lam0); 
 
 Homo = [K1;
         K2;
@@ -195,6 +204,7 @@ dHdmu = [dK1dmu;
          dK2dmu
          dK3dmu]; 
 end
+
 
 function [f,df,hf] = objfun(x)
 % note: the constraint x >= 0 is assimilated into func: obj_homo
@@ -240,3 +250,103 @@ hg{1} = zeros(length(x));
 hg{2} = zeros(length(x));
 
 end
+
+
+%{
+function [f,df,hf] = objfun(x)
+%  Rosen-Suzuki Problem
+%  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4
+%  s.t. 8  - x1^2 -   x2^2 - x3^2 -   x4^2 -   x1 + x2 - x3 + x4 >= 0 
+%       10 - x1^2 - 2*x2^2 - x3^2 - 2*x4^2 +   x1           + x4 >= 0          
+%       5- 2*x1^2 -   x2^2 - x3^2          - 2*x1 + x2      + x4 >= 0            
+%  Initial Point x = [1,1,1,1];   
+%  Solution at   x = [0,1,2,-1]; 
+%                f = -44   
+%  Common wrong solution x = [2.5000, 2.5000, 5.2500, -3.5000]
+%                        f = -79.8750
+f = x(1)^2 + x(2)^2 + 2*x(3)^2 + x(4)^2 -5*x(1) -5*x(2)-21*x(3) + 7*x(4); 
+
+% its derivative wrt. x
+df = zeros(4,1); 
+df(1)= 2*x(1)-5;
+df(2)= 2*x(2)-5;
+df(3)= 4*x(3)-21;
+df(4)= 2*x(4)+7; 
+
+hf = diag([2,2,4,2]);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [g, dg, hg]= confun(x)
+% Constraint function
+g = zeros(3,1);
+g(1) = 8 - x(1)^2 -  x(2)^2-x(3)^2 - x(4)^2 - x(1) + x(2) - x(3) + x(4); 
+g(2) = 10- x(1)^2 -2*x(2)^2-x(3)^2 - 2*x(4)^2 +   x(1)  + x(4)         ;
+g(3) = 5-2*x(1)^2 -  x(2)^2-x(3)^2          - 2*x(1) + x(2)      + x(4);  
+
+% Gradients of the constraint functions wrt. x
+dg=[-2*x(1)-1, -2*x(2)+1, -2*x(3)-1, -2*x(4)+1; 
+       -2*x(1)+1, -4*x(2),   -2*x(3),   -4*x(4)+1;
+       -4*x(1)-2, -2*x(2)+1, -2*x(3),   1];
+dg = dg'; 
+ceq = [];  Gceq = []; 
+
+Hcineq = cell(1, length(g)); 
+Hcineq{1} = diag([-2, -2, -2, -2]);
+Hcineq{2} = diag([-2, -4, -2, -4]);
+Hcineq{3} = diag([-4, -2, -2,  0]);
+
+% % if fmincon, or the interior points on paper:   c<0
+g = -g;
+dg = -dg; 
+Hcineq{1} = -1*Hcineq{1}; 
+Hcineq{2} = -1*Hcineq{2};
+Hcineq{3} = -1*Hcineq{3};
+hg = Hcineq; 
+end
+%}
+
+%{
+function [f,df,hf] = objfun(x)
+% solution
+% x = [-9.5473    1.0474]
+% f = 0.0236
+f = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1);
+df = zeros(2,1);
+hf = zeros(2,2);
+df(1,1) = exp(x(1))*(4*x(1)^2 + 2*x(2)^2 + 4*x(1)*x(2) + 2*x(2) + 1) + ...
+    exp(x(1))*(8*x(1) + 4*x(2)); 
+df(2,1) = exp(x(1))*(4*x(2) + 4*x(1) +2);
+
+hf(1,1) = df(1,1) + exp(x(1))*(8*x(1) + 4*x(2)) + exp(x(1))*8;
+hf(1,2) = df(2,1) + exp(x(1))*(4);
+hf(2,1) = df(2,1) + exp(x(1))*(4);
+hf(2,2) = exp(x(1))*(4);
+
+end
+
+function [g, dg, hg] = confun(x)
+% Nonlinear inequality constraints
+g = [1.5 + x(1)*x(2) - x(1) - x(2);     
+     -x(1)*x(2) - 10];
+ 
+dC1dx = [x(2)-1;
+         x(1)-1]; 
+dC2dx = [-x(2)
+         -x(1)];
+dg = [dC1dx, dC2dx]; 
+
+hg = cell(1, length(g)); 
+hg{1} = [0,1;1,0];
+hg{2} = [0,-1;-1,0];
+
+% Nonlinear equality constraints
+% ceq = x(1)^2 + x(2)^2 - 4;
+% Gceq = [2*x(1);
+%         2*x(2)];   
+% Hceq = cell(1, length(ceq));    
+% Hceq{1} = [2,0;
+%            0,2]; 
+end
+%}

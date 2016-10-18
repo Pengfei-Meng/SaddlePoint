@@ -14,26 +14,27 @@ function main_interior()
 % % x = [-9.5473    1.0474]
 % % f = 0.0236
 
-options = optimoptions(@fmincon,'Algorithm','interior-point',...
-    'GradObj','on',...
-    'GradConstr','on','DerivativeCheck','on'); 
-[x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
+% options = optimoptions(@fmincon,'Algorithm','interior-point',...
+%     'GradObj','on',...
+%     'GradConstr','on','DerivativeCheck','on'); 
+% [x,f] = fmincon(@objfun, [-1,1], [],[],[],[],[],[],@coninequ, options)
 
 mu = 1; 
 epsilon_mu = 1e-1;     epsilon_tol = 1e-6; 
 theta = 0.5; 
 
+% % Rosen-suzuki
 % n = 4;    m = 3; 
 % x = [1;1;1;1];     lam = ones(3,1);
-% % S = [4; 6; 1]; 
-% S = [1;1;1]; 
+% S = [4; 6; 1]; 
+% % S = [1;1;1]; 
 
 n = 2;  m = 2;
 x = [-1;1];     lam = ones(n,1);
 S = [1;1];
 
 [fobj,gobj,hobj] = objfun(x); 
-[Cg, ~, Ag, ~, Hg]= coninequ(x);
+[Cg, Ag, Hg]= confun(x);
 
 E_mu0 = E_inf(0.0);
 E_local = E_mu0;
@@ -41,17 +42,23 @@ E_local = E_mu0;
 outer_tol = E_mu0 * epsilon_tol; 
 inner_tol = E_mu0 * epsilon_mu;
 
-glob = true; 
+glob = false; 
 radius = 2.0;     % can be changed to other values, flexible with dim(x,s)
 
 eta = 1e-8; 
 tau = 0.995; 
 
 outer_iter = 0; 
+inner_iter = 0; 
+
+figure('Name', 'Lam Path')
+hold on 
+scatter(x(1), x(2),[],'filled')
+
 while E_mu0 > outer_tol  %epsilon_tol  %outer_tol
     
   outer_iter = outer_iter + 1; 
-  inner_iter = 0; 
+
   nu = 1.0; 
   radius = 3;
   gmres_iter = [];
@@ -134,7 +141,7 @@ while E_mu0 > outer_tol  %epsilon_tol  %outer_tol
       end
       
       [fobj,gobj,hobj] = objfun(x); 
-      [Cg, ~, Ag, ~, Hg]= coninequ(x);
+      [Cg, Ag, Hg]= confun(x);
       E_local = E_inf(mu);    % E_local < epsilon_mu  %(it has to be)
 
 %       x
@@ -143,12 +150,15 @@ while E_mu0 > outer_tol  %epsilon_tol  %outer_tol
       
   end
   
+  hold on 
+  scatter(x(1), x(2),[],'filled')
+  
   E_mu0 = E_inf(0.0);
     
   mu = theta*mu;
   epsilon_mu = 0.5*epsilon_mu; 
   inner_tol = E_mu0 * epsilon_mu;
-  gmres_iter
+  gmres_iter;
   
   if any(S<0)
       S           % strange that S is indeed positive all the time
@@ -186,7 +196,7 @@ end
 
 function [p_red,nu] = pred_red(x,S,mu,lam,dx,nu)
     [fobj,gobj,hobj] = objfun(x); 
-    [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    [Cg, Ag, Hg]= confun(x);
 
      n = length(x); 
      m = length(Cg);
@@ -223,7 +233,7 @@ function phi = merit_phi(x,S,nu,mu)
 %   end
 
     [fobj,gobj,hobj] = objfun(x); 
-    [Cg, ~, Ag, ~, Hg]= coninequ(x);
+    [Cg, Ag, Hg]= confun(x);
     
     % note, here inequality constraints only! 
     phi = fobj - mu*sum(log(S)) + nu * norm(Cg + S,2);
@@ -267,6 +277,52 @@ function [dx, iter] = kkt_matrix(x, S, lam, mu, gobj,hobj,Cg,Ag,Hg)
     % cond(kkt_mat)
     
 end
+
+function [f,df,hf] = objfun(x)
+% note: the constraint x >= 0 is assimilated into func: obj_homo
+
+% initial x0, x is critical
+% % first problem
+% x0 = [2;2]; 
+% x = [3; 3];     % find the solution to the 1e-4 precision
+
+f = 1/2*(x(1) + 1)^2  + 1/2*(x(2) + 1)^2;
+df = [x(1) + 1;
+     x(2) + 1];
+hf = [1,0;
+     0,1];  
+
+%{
+% x0 = [0.6;4];       % x0, is critical
+% x = [2; 2];         % strangely, this is not as robust as assumed
+                      % can you find out the reason why?
+                      % some x0, x will work; others doesn't? 
+% f = (x(1) + 1)*(x(1) - 2)  + (x(2) - 1)*(x(2) + 2);
+% g = [2*x(1)-1;
+%      2*x(2)+1];
+% h = [2,0;
+%      0,2];
+%}
+end
+
+function [g, dg, hg] = confun(x)
+% x0 = [0.8; 0.9];       % x0, is critical
+% lam0 = [0.1;0.1];      % here g<=0
+% x = [4; 3];   
+% lam = [1; 1];
+
+A = [2,0;
+     0,3];
+b = [1;1];
+
+g = -(A*x - b); 
+dg = -A; 
+hg = cell(1, length(g)); 
+hg{1} = zeros(length(x));
+hg{2} = zeros(length(x));
+
+end
+
 
 %{
 function [f,g,h] = objfun(x)
@@ -324,6 +380,7 @@ end
 %}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%{
 % % % Another nonlinear example
 function [f,g,h] = objfun(x)
 % solution
@@ -364,3 +421,4 @@ ceq = [];
 Gceq = []; 
 end
 
+%}
