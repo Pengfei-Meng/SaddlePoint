@@ -45,9 +45,9 @@ while mu > 0.0
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0); 
      
-     if norm(Homo) < 1e-5
-         break
-     end
+%      if norm(Homo) < 1e-5
+%          break
+%      end
      
      % dxdmu = gmres(dHdx, dHdmu);
      dxdmu = dHdx \ dHdmu;
@@ -160,24 +160,30 @@ for j = 1:length(g)
     lag_hess = lag_hess + lam(j).*hg{j};
 end
 
-K1 = (1-mu).*lag_grad + mu.*(x-x0);
-dK1dx = (1-mu).*lag_hess + mu.*eye(length(x));
+K1 = (1-mu).*lag_grad - mu.*(x-x0);
+dK1dx = (1-mu).*lag_hess - mu.*eye(length(x));
 dK1ds = zeros(length(K1), length(s));
 dK1dlam = (1-mu).*dg; 
-dK1dmu = -lag_grad + (x-x0);
+dK1dmu = -lag_grad - (x-x0);
 
 e = ones(size(lam)); 
-K2 = (1-mu).*(s.*lam - mu.*e) + mu.*(s-s0); 
-dK2dx = zeros(length(lam), length(x));
-dK2ds = (1-mu).*diag(lam./s) + mu.*eye(length(s));
-dK2dlam = (1-mu).*eye(length(K2));     
-dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0); 
+% K2 = (1-mu).*(s.*lam - mu.*e) + mu.*(s-s0); 
+% dK2ds = (1-mu).*diag(lam./s) + mu.*eye(length(s));
+% dK2dlam = (1-mu).*eye(length(K2));
+% dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0); 
 
-K3 = (1-mu).*(g+s) + mu.*(lam - lam0); 
+K2 = (1-mu).*(s.*lam) - mu.*(s-s0); 
+dK2dx = zeros(length(lam), length(x));
+dK2ds = (1-mu).*diag(lam) - mu.*eye(length(s)); 
+dK2dlam = (1-mu).*diag(s); 
+dK2dmu = -s.*lam - (s-s0); 
+
+
+K3 = (1-mu).*(g+s) - mu.*(lam - lam0); 
 dK3dx = (1-mu).*dg; 
 dK3ds = (1-mu).*eye(length(K3)); 
 dK3dlam = mu.*eye(length(lam)); 
-dK3dmu = -(g+s) + (lam-lam0); 
+dK3dmu = -(g+s) - (lam-lam0); 
 
 Homo = [K1;
         K2;
@@ -219,7 +225,7 @@ end
 
 function [g, dg, hg] = confun(x)
 % x0 = [0.8; 0.9];       % x0, is critical
-% lam0 = [0.1;0.1];
+% lam0 = [0.1;0.1];      % here g<=0
 % x = [4; 3];   
 % lam = [1; 1];
 
