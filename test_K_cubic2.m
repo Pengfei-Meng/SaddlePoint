@@ -5,11 +5,11 @@ function test_K_cubic2()
 % it is working right now! 
 
 f_size_min = 0.05;             
-f_size_max = 7;                
+f_size_max = 5;                
 dmu_min = -0.9; 
 dmu_max = -0.01; 
 delta_bar = 1;                 % simpler problem, large delta_bar
-phi_bar = 10/180*pi;            
+phi_bar = 6/180*pi;            
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
@@ -19,17 +19,17 @@ mu = 1.0;
 % c0 = [0.1; 0.1]; 
 
 % polynomial
-x0 = [1.2; 1.1];        
+x0 = [0.8; 0.9];        
 lam0 = [0.1;0.1];
-b0 = [0.2;0.2];
+b0 = [1;1];
 c0 = [0.3; 0.3]; 
 
 % x0 = [-7; 0.6];        
 % lam0 = [2; 2];
 % b0 = [1; 1];
 % c0 = [0.3; 0.3]; 
-x = [5; 3];   
-lam = [0.2; 0.2];
+x = [4; 3];   
+lam = [1; 1];
 
 repair = true; 
 
@@ -245,7 +245,7 @@ dHdmu = [dK1dmu;
 end
 
 
-
+%{
 function [f,df,hf] = objfun(x)
 % note: the constraint x >= 0 is assimilated into func: obj_homo
 
@@ -290,10 +290,10 @@ hg{1} = zeros(length(x));
 hg{2} = zeros(length(x));
 
 end
+%}
 
 
-
-%{
+ 
 function [f,df,hf] = objfun(x)
 % solution
 % x = [-9.5473    1.0474]
@@ -335,4 +335,4 @@ hg{2} = [0,-1;-1,0];
 % Hceq{1} = [2,0;
 %            0,2]; 
 end
-%}
+ 

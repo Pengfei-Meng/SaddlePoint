@@ -12,26 +12,29 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-% x0 = [1; 1];           
-% s0 = [2; 2]; 
-% lam0 = [0;0];
-% x = [3; 3];  
-% s = [1; 1]; 
-% lam = [1; 1];
-
 x0 = [-1; 1];           
-s0 = [1; 1]; 
+s0 = [2; 2]; 
 lam0 = [0;0];
 x = [-3; -3];  
-s = [2; 2]; 
+s = [1; 1]; 
 lam = [1; 1];
 
-% x0 = [0.1;0.1;0.1;0.1];
-% s0 = [0.8;0.8;0.8];
-% lam0 = [0.1;0.1;0.1];
-% x = [1;1;1;1];     
-% s = [1;1;1]; 
-% lam = ones(3,1);
+% x0 = [-3; 3];  
+% s0 = [5; 2]; 
+% lam0 = [0;0];
+% x = [-3; -3];  
+% s = [2; 2]; 
+% lam = [1; 1];
+
+% Rosen-Suzuki
+%{
+x0 = [1;1;1;1];
+s0 = [0.8;0.8;0.8];
+lam0 = [0.1;0.1;0.1];
+x = [1;1;1;1];     
+s = [1;1;1]; 
+lam = ones(3,1);
+%}
 
 nx = length(x);
 ns = length(s); 
@@ -218,6 +221,7 @@ dHdmu = [dK1dmu;
 end
 
 
+%{
 function [f,df,hf] = objfun(x)
 % note: the constraint x >= 0 is assimilated into func: obj_homo
 
@@ -226,23 +230,23 @@ function [f,df,hf] = objfun(x)
 % x0 = [2;2]; 
 % x = [3; 3];     % find the solution to the 1e-4 precision
 
-f = 1/2*(x(1) + 1)^2  + 1/2*(x(2) + 1)^2;
-df = [x(1) + 1;
-     x(2) + 1];
-hf = [1,0;
-     0,1];  
+% f = 1/2*(x(1) + 1)^2  + 1/2*(x(2) + 1)^2;
+% df = [x(1) + 1;
+%      x(2) + 1];
+% hf = [1,0;
+%      0,1];  
 
-%{
+ 
 % x0 = [0.6;4];       % x0, is critical
 % x = [2; 2];         % strangely, this is not as robust as assumed
                       % can you find out the reason why?
                       % some x0, x will work; others doesn't? 
-% f = (x(1) + 1)*(x(1) - 2)  + (x(2) - 1)*(x(2) + 2);
-% g = [2*x(1)-1;
-%      2*x(2)+1];
-% h = [2,0;
-%      0,2];
-%}
+f = (x(1) + 1)*(x(1) - 2)  + (x(2) - 1)*(x(2) + 2);
+df = [2*x(1)-1;
+     2*x(2)+1];
+hf = [2,0;
+     0,2];
+ 
 end
 
 function [g, dg, hg] = confun(x)
@@ -251,9 +255,9 @@ function [g, dg, hg] = confun(x)
 % x = [4; 3];   
 % lam = [1; 1];
 
-A = [2,0;
-     0,3];
-b = [1;1];
+A = [1,0;
+     0,1];
+b = [0;0];
 
 g = -(A*x - b); 
 dg = -A; 
@@ -262,6 +266,7 @@ hg{1} = zeros(length(x));
 hg{2} = zeros(length(x));
 
 end
+%}
 
 
 %{
@@ -319,7 +324,7 @@ hg = Hcineq;
 end
 %}
 
-%{
+
 function [f,df,hf] = objfun(x)
 % solution
 % x = [-9.5473    1.0474]
@@ -361,4 +366,3 @@ hg{2} = [0,-1;-1,0];
 % Hceq{1} = [2,0;
 %            0,2]; 
 end
-%}
