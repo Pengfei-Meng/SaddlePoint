@@ -1,4 +1,4 @@
-function test_K_cubic3()
+function test_K_slack()
 % test the cubic K function on linear constrained problems
 % min f(x)
 % s.t. -(Ax-b) <= 0     lam > 0

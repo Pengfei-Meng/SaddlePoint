@@ -5,11 +5,11 @@ function test_K_cubic2()
 % it is working right now! 
 
 f_size_min = 0.05;             
-f_size_max = 6;                
+f_size_max = 7;                
 dmu_min = -0.9; 
 dmu_max = -0.01; 
 delta_bar = 1;                 % simpler problem, large delta_bar
-phi_bar = 5/180*pi;            
+phi_bar = 10/180*pi;            
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
