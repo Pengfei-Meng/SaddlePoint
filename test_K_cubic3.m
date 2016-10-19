@@ -16,7 +16,7 @@ x0 = [1; 1];
 s0 = [2; 2]; 
 lam0 = [0.1;0.1];
 x = [3; 3];  
-s = [5; 5]; 
+s = [1; 1]; 
 lam = [1; 1];
 
 
@@ -50,7 +50,7 @@ scatter(x(1), x(2),[],'filled')
 
 while mu > 0.0
      outer_iter = outer_iter + 1; 
-     s
+     s; 
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, s, lam, mu, x0, s0, lam0); 
      
@@ -58,7 +58,7 @@ while mu > 0.0
 %          break
 %      end
      
-     % dxdmu = gmres(dHdx, dHdmu);
+     % dxdmu = gmres(dHdx, dHdmu, [], 0.5);
      dxdmu = dHdx \ dHdmu;
      tau = [dxdmu; -1];    
      t = tau./norm(tau);             % normalized Newton step
@@ -176,17 +176,24 @@ dK1dlam = (1-mu).*dg;
 dK1dmu = -lag_grad + (x-x0);
 
 e = ones(size(lam)); 
-% K2 = (1-mu).*(s.*lam - mu.*e) + mu.*(s-s0); 
-% dK2ds = (1-mu).*diag(lam./s) + mu.*eye(length(s));
-% dK2dlam = (1-mu).*eye(length(K2));
-% dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0); 
-
-K2 = (1-mu).*(s.*lam) + mu.*(s-s0); 
+K2 = (1-mu).*(s.*lam - mu.*e) + mu.*(s-s0); 
 dK2dx = zeros(length(lam), length(x));
-dK2ds = (1-mu).*diag(lam) + mu.*eye(length(s)); 
-dK2dlam = (1-mu).*diag(s);   %    eye(length(K1)); %diag(s); 
-dK2dmu = -s.*lam + (s-s0); 
+dK2ds = (1-mu).*diag(lam) + mu.*eye(length(s));   % diag(1./s); 
+dK2dlam = (1-mu).*diag(s) ;                       % eye(length(K2));
+% dK2dmu = -lam + (2*mu-1).*e + (s-s0); 
+dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0); 
 
+% K2 = (1-mu).*(s.*lam) + mu.*(s-s0); 
+% dK2dx = zeros(length(lam), length(x));
+% dK2ds = (1-mu).*diag(lam) + mu.*eye(length(s)); 
+% dK2dlam = (1-mu).*diag(s);   %    eye(length(K1)); %diag(s); 
+% dK2dmu = -s.*lam + (s-s0); 
+
+% K2 = (1-mu).*(s.*lam) - mu.*e; 
+% dK2dx = zeros(length(lam), length(x));
+% dK2ds = (1-mu).*diag(lam./s); 
+% dK2dlam = (1-mu).*eye(length(K2)); 
+% dK2dmu = -s.*lam - e; 
 
 K3 = (1-mu).*(g+s) + mu.*(lam - lam0); 
 dK3dx = (1-mu).*dg'; 
