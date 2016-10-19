@@ -14,7 +14,7 @@ phi_bar = 5/180*pi;
 mu = 1.0;   
 x0 = [1; 1];           
 s0 = [2; 2]; 
-lam0 = [0.1;0.1];
+lam0 = [0;0];
 x = [3; 3];  
 s = [1; 1]; 
 lam = [1; 1];
@@ -195,11 +195,11 @@ dK2dmu = -s.*lam + (2*mu-1).*e + (s-s0);
 % dK2dlam = (1-mu).*eye(length(K2)); 
 % dK2dmu = -s.*lam - e; 
 
-K3 = (1-mu).*(g+s) + mu.*(lam - lam0); 
+K3 = (1-mu).*(g+s) - mu.*(lam - lam0); 
 dK3dx = (1-mu).*dg'; 
 dK3ds = (1-mu).*eye(length(K3)); 
-dK3dlam = +mu.*eye(length(lam)); 
-dK3dmu = -(g+s) + (lam-lam0); 
+dK3dlam = -mu.*eye(length(lam)); 
+dK3dmu = -(g+s) - (lam-lam0); 
 
 Homo = [K1;
         K2;
