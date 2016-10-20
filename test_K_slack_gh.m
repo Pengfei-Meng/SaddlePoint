@@ -147,8 +147,8 @@ lag_grad = df + dg*lamg + dh*lamh;
 
 e = ones(size(lamg)); 
 K = [lag_grad;
-     s.*lamg - mu.*e; 
-     g - s;
+     s.*lamg;   
+     g + s;
      h]; 
 end
 
