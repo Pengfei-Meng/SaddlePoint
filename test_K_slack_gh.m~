@@ -1,8 +1,7 @@
 function test_K_slack_gh()
 % test the cubic K function on linear constrained problems
 % min f(x)
-% s.t h(x) = 0
-%     g(x) <= 0
+% s.t. -(Ax-b) <= 0     lam > 0
 
 % % ----------  matlab  ---------
 % x0 = [-1,1]; % Make a starting guess at the solution
@@ -30,9 +29,7 @@ lamg = 1;
 lamh = 1; 
 
 nx = length(x);
-ns = length(s);    % inequality constraints
-ng = length(lamg);    % inequality constraints
-nh = length(lamh);    % equality constraints
+ns = length(s); 
 
 K0 = obj_K(x, s, lamg, lamh, mu); 
 normK = norm(K0,Inf); 
@@ -60,6 +57,10 @@ while mu > 0.0
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
      
+%      if norm(Homo) < 1e-5
+%          break
+%      end
+     
      % dxdmu = gmres(dHdx, dHdmu, [], 0.5);
      dxdmu = dHdx \ dHdmu;
      tau = [dxdmu; -1];    
@@ -74,15 +75,23 @@ while mu > 0.0
         f_size = max(f_size_min, f_size); 
         f_size = min(f_size_max, f_size); 
         step_size = step_size/f_size; 
-       
-     end
+
+%         if f_size >= f_size_max
+%             sprintf('backtracking')
+%             x = xsave; 
+%             t = tsave; 
+%             lam = lamsave; 
+%         end        
+    end
     
     tsave = t; 
+    xsave = x; 
+    lamsave = lamg; 
     
     x = x + step_size.*t(1:nx);
     s = s + step_size.*t(nx+1:nx+ns);
-    lamg = lamg + step_size.*t(nx+ns+1:nx+ns+ng);
-    lamh = lamh + step_size.*t(nx+ns+ng+1:end-1);
+    lamg = lamg + step_size.*t(nx+ns+1:end-1);
+    
     dmu = step_size.*t(end); 
     dmu = max(dmu_min, dmu);
     dmu = min(dmu_max, dmu);    
@@ -90,7 +99,7 @@ while mu > 0.0
     
     mu = max(0.0, mu); 
     
-    [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
+    [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, mu, x0, s0, lamg0); 
     % lam = solve_lam(mu,x,b0,c0, lam);
     
     normH = norm(Homo);
@@ -107,14 +116,13 @@ while mu > 0.0
         % dx = -gmres(dHdx, Homo);
         x = x + dx(1:nx);
         s = s + dx(nx+1:nx+ns); 
-        lamg = lamg + dx(nx+ns+1:nx+ns+ng); 
-        lamh = lamh + dx(nx+ns+ng+1:end); 
-        
-        [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
+        lamg = lamg + dx(nx+ns+1:end); 
+                
+        [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, mu, x0, s0, lamg0); 
         normH = norm(Homo);
     end 
     
-    K = obj_K(x, s, lamg, lamh, mu); 
+    K = obj_K(x,s,lamg, mu); 
     normK = norm(K,Inf); 
 
     if normK < K0_tol
@@ -122,7 +130,7 @@ while mu > 0.0
     end
     
     x_hist = [x_hist, x];
-    lamg_hist = [lamg_hist, lamg]; 
+    lam_hist = [lam_hist, lamg]; 
     hold on 
     scatter(x(1), x(2),[],'filled')
     
@@ -189,27 +197,24 @@ dK3dx = (1-mu).*dg';
 dK3ds = (1-mu).*eye(length(K3)); 
 dK3dlamg = -mu.*eye(length(lamg)); 
 dK3dlamh = zeros(length(K3),length(lamh));
-dK3dmu = -(g+s) - (lamg-lamg0); 
+dK3dmu = -(g+s) - (lamg-lam0); 
 
 K4 = (1-mu).*h - mu.*(lamh - lamh0); 
 dK4dx = (1-mu).*dh';
 dK4ds = zeros(length(K4),length(s));
-dK4dlamg = zeros(length(K4),length(lamg));
-dK4dlamh = -mu.*eye(length(lamh));
-dK4dmu = -h - (lamh - lamh0); 
+dK4dlamg = zeros(length(K4),length(lamg))
+
+
 
 Homo = [K1;
         K2;
-        K3;
-        K4];    
-dHdxsl = [dK1dx, dK1ds, dK1dlamg, dK1dlamh;
-          dK2dx, dK2ds, dK2dlamg, dK2dlamh;  
-          dK3dx, dK3ds, dK3dlamg, dK3dlamh;
-          dK4dx, dK4ds, dK4dlamg, dK4dlamh];
+        K3];    
+dHdxsl = [dK1dx, dK1ds, dK1dlamg;
+          dK2dx, dK2ds, dK2dlamg; 
+          dK3dx, dK3ds, dK3dlamg];
 dHdmu = [dK1dmu;
-         dK2dmu;
-         dK3dmu;
-         dK4dmu]; 
+         dK2dmu
+         dK3dmu]; 
 end
 
 
