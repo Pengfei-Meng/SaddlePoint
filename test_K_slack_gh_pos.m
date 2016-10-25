@@ -19,14 +19,24 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-x0 = [-1; 1];           
-s0 = 2; 
-lamg0 = 0;
-lamh0 = 0; 
-x = [-3; -3];  
-s = 1; 
-lamg = -1;
-lamh = -1; 
+% x0 = [-1; 1];           
+% s0 = 2; 
+% lamg0 = 0;
+% lamh0 = 0; 
+% x = [-3; -3];  
+% s = 1; 
+% lamg = -1;
+% lamh = -1; 
+
+x0 = [1;1;1;1];
+s0 = ones(3,1);
+lamg0 = zeros(3,1);
+lamh0 = []; 
+x = x0;
+s = s0;
+lamg = lamg0;
+lamh = lamh0;
+
 
 nx = length(x);
 ns = length(s);       % inequality constraints
@@ -81,7 +91,9 @@ while mu > 0.0
     x = x + step_size.*t(1:nx);
     s = s + step_size.*t(nx+1:nx+ns);
     lamg = lamg + step_size.*t(nx+ns+1:nx+ns+ng);
-    lamh = lamh + step_size.*t(nx+ns+ng+1:end-1);
+    if ~isempty(lamh0)
+        lamh = lamh + step_size.*t(nx+ns+ng+1:end-1);
+    end
     dmu = step_size.*t(end); 
     dmu = max(dmu_min, dmu);
     dmu = min(dmu_max, dmu);    
@@ -107,7 +119,9 @@ while mu > 0.0
         x = x + dx(1:nx);
         s = s + dx(nx+1:nx+ns); 
         lamg = lamg + dx(nx+ns+1:nx+ns+ng); 
-        lamh = lamh + dx(nx+ns+ng+1:end); 
+        if ~isempty(lamh0)
+            lamh = lamh + dx(nx+ns+ng+1:end);
+        end
         
         [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
         normH = norm(Homo);
@@ -142,7 +156,14 @@ function K = obj_K(x, s, lamg, lamh, mu)
 [f, df, hf] = objfun(x);
 [g, h, dg, dh, hg, hh] = confun(x); 
 
-lag_grad = df + dg*lamg + dh*lamh; 
+lag_grad = df;
+if ~isempty(dg)
+    lag_grad = lag_grad + dg*lamg;
+end
+
+if ~isempty(dh)
+    lag_grad = lag_grad + dh*lamh;
+end
 
 e = ones(size(lamg)); 
 K = [lag_grad;
@@ -157,15 +178,20 @@ function [Homo, dHdxsl, dHdmu] = ...
 [f, df, hf] = objfun(x);
 [g, h, dg, dh, hg, hh] = confun(x); 
 
-lag_grad = df + dg*lamg + dh*lamh; 
+lag_grad = df; 
 lag_hess = hf; 
-for j = 1:length(g)
-    lag_hess = lag_hess + lamg(j).*hg{j};
+if ~isempty(dg)
+    lag_grad = lag_grad + dg*lamg;
+    for j = 1:length(g)
+        lag_hess = lag_hess + lamg(j).*hg{j};
+    end
 end
-for j = 1:length(h)
-    lag_hess = lag_hess + lamh(j).*hh{j};
+if ~isempty(dh)
+    lag_grad = lag_grad + dh*lamh;
+    for j = 1:length(h)
+        lag_hess = lag_hess + lamh(j).*hh{j};
+    end
 end
-
 
 K1 = (1-mu).*lag_grad + mu.*(x-x0);
 dK1dx = (1-mu).*lag_hess + mu.*eye(length(x));
@@ -197,18 +223,34 @@ dK4dlamg = zeros(length(K4),length(lamg));
 dK4dlamh = -mu.*eye(length(lamh));
 dK4dmu = -h - (lamh - lamh0); 
 
-Homo = [K1;
-        K2;
-        K3;
-        K4];    
-dHdxsl = [dK1dx, dK1ds, dK1dlamg, dK1dlamh;
-          dK2dx, dK2ds, dK2dlamg, dK2dlamh;  
-          dK3dx, dK3ds, dK3dlamg, dK3dlamh;
-          dK4dx, dK4ds, dK4dlamg, dK4dlamh];
-dHdmu = [dK1dmu;
-         dK2dmu;
-         dK3dmu;
-         dK4dmu]; 
+ 
+    
+if ~isempty(dh)
+    Homo = [K1;
+            K2;
+            K3;
+            K4];  
+    dHdxsl = [dK1dx, dK1ds, dK1dlamg, dK1dlamh;
+              dK2dx, dK2ds, dK2dlamg, dK2dlamh;  
+              dK3dx, dK3ds, dK3dlamg, dK3dlamh;
+              dK4dx, dK4ds, dK4dlamg, dK4dlamh];
+    dHdmu = [dK1dmu;
+             dK2dmu;
+             dK3dmu;
+             dK4dmu]; 
+          
+else
+    Homo = [K1;
+            K2;
+            K3];      
+    dHdxsl = [dK1dx, dK1ds, dK1dlamg;
+              dK2dx, dK2ds, dK2dlamg;  
+              dK3dx, dK3ds, dK3dlamg];    
+    dHdmu = [dK1dmu;
+             dK2dmu;
+             dK3dmu]; 
+end
+
 end
 
 
@@ -259,9 +301,7 @@ hg{2} = zeros(length(x));
 end
 %}
 
-
-
-
+%{
 function [f,df,hf] = objfun(x)
 % solution
 % x = -0.7529    0.4332
@@ -303,4 +343,62 @@ dh = [2*x(1);
       1]; 
 hh{1} = [2,0;
          0,0];
+end
+%}
+
+
+function [f,df,hf] = objfun(x)
+%  Rosen-Suzuki Problem
+%  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4
+%  s.t. 8  - x1^2 -   x2^2 - x3^2 -   x4^2 -   x1 + x2 - x3 + x4 >= 0 
+%       10 - x1^2 - 2*x2^2 - x3^2 - 2*x4^2 +   x1           + x4 >= 0          
+%       5- 2*x1^2 -   x2^2 - x3^2          - 2*x1 + x2      + x4 >= 0            
+%  Initial Point x = [1,1,1,1];   
+%  Solution at   x = [0,1,2,-1]; 
+%                f = -44   
+%  Common wrong solution x = [2.5000, 2.5000, 5.2500, -3.5000]
+%                        f = -79.8750
+f = x(1)^2 + x(2)^2 + 2*x(3)^2 + x(4)^2 -5*x(1) -5*x(2)-21*x(3) + 7*x(4); 
+
+% its derivative wrt. x
+df = zeros(4,1); 
+df(1)= 2*x(1)-5;
+df(2)= 2*x(2)-5;
+df(3)= 4*x(3)-21;
+df(4)= 2*x(4)+7; 
+
+hf = diag([2,2,4,2]);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function [g, h, dg, dh, hg, hh]= confun(x)
+% Constraint function
+g = zeros(3,1);
+g(1) = 8 - x(1)^2 -  x(2)^2-x(3)^2 - x(4)^2 - x(1) + x(2) - x(3) + x(4); 
+g(2) = 10- x(1)^2 -2*x(2)^2-x(3)^2 - 2*x(4)^2 +   x(1)  + x(4)         ;
+g(3) = 5-2*x(1)^2 -  x(2)^2-x(3)^2          - 2*x(1) + x(2)      + x(4);  
+
+% Gradients of the constraint functions wrt. x
+dg=[-2*x(1)-1, -2*x(2)+1, -2*x(3)-1, -2*x(4)+1; 
+       -2*x(1)+1, -4*x(2),   -2*x(3),   -4*x(4)+1;
+       -4*x(1)-2, -2*x(2)+1, -2*x(3),   1];
+dg = dg'; 
+
+hg = cell(1, length(g)); 
+hg{1} = diag([-2, -2, -2, -2]);
+hg{2} = diag([-2, -4, -2, -4]);
+hg{3} = diag([-4, -2, -2,  0]);
+
+% % if fmincon, or the interior points on paper:   c<0
+% g = -g;
+% dg = -dg; 
+% Hcineq{1} = -1*Hcineq{1}; 
+% Hcineq{2} = -1*Hcineq{2};
+% Hcineq{3} = -1*Hcineq{3};
+% hg = Hcineq; 
+
+h = [];
+dh = [];
+hh = []; 
 end

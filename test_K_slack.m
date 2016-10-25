@@ -12,12 +12,12 @@ phi_bar = 5/180*pi;
 
 % Brown Zingg: mu: 1 -> 0 (used here);   Watson : mu: 0 -> 1
 mu = 1.0;   
-x0 = [-1; 1];           
-s0 = [2; 2]; 
-lam0 = [0;0];
-x = [-3; -3];  
-s = [1; 1]; 
-lam = [1; 1];
+% x0 = [-1; 1];           
+% s0 = [2; 2]; 
+% lam0 = [0;0];
+% x = [-3; -3];  
+% s = [1; 1]; 
+% lam = [1; 1];
 
 % x0 = [-3; 3];  
 % s0 = [5; 2]; 
@@ -27,14 +27,18 @@ lam = [1; 1];
 % lam = [1; 1];
 
 % Rosen-Suzuki
-%{
+ 
 x0 = [1;1;1;1];
-s0 = [0.8;0.8;0.8];
-lam0 = [0.1;0.1;0.1];
-x = [1;1;1;1];     
-s = [1;1;1]; 
-lam = ones(3,1);
-%}
+s0 = ones(3,1);
+% lam0 = [0.1;0.1;0.1];
+lam0 = zeros(3,1);
+% x = [1;1;1;1];     
+% s = [1;1;1]; 
+% lam = ones(3,1);
+x = x0;
+s = s0;
+lam = lam0;
+
 
 nx = length(x);
 ns = length(s); 
@@ -269,7 +273,7 @@ end
 %}
 
 
-%{
+
 function [f,df,hf] = objfun(x)
 %  Rosen-Suzuki Problem
 %  min  x1^2 + x2^2 + 2*x3^2 + x4^2        - 5*x1 -5*x2 -21*x3 + 7*x4
@@ -322,9 +326,9 @@ Hcineq{2} = -1*Hcineq{2};
 Hcineq{3} = -1*Hcineq{3};
 hg = Hcineq; 
 end
-%}
 
 
+%{
 function [f,df,hf] = objfun(x)
 % solution
 % x = [-9.5473    1.0474]
@@ -366,3 +370,4 @@ hg{2} = [0,-1;-1,0];
 % Hceq{1} = [2,0;
 %            0,2]; 
 end
+%}

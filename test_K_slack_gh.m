@@ -60,8 +60,8 @@ while mu > 0.0
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
      
-     % dxdmu = gmres(dHdx, dHdmu, [], 0.5);
-     dxdmu = dHdx \ dHdmu;
+     dxdmu = gmres(dHdx, dHdmu, [], 0.5);
+     % dxdmu = dHdx \ dHdmu
      tau = [dxdmu; -1];    
      t = tau./norm(tau);             % normalized Newton step
   
@@ -103,8 +103,8 @@ while mu > 0.0
     while (normH > inner_tol) && (newton_iter < 20)
         newton_iter = newton_iter + 1; 
         inner_iter = inner_iter + 1; 
-        dx = -dHdx\Homo;
-        % dx = -gmres(dHdx, Homo);
+        % dx = -dHdx\Homo;
+        dx = -gmres(dHdx, Homo);
         x = x + dx(1:nx);
         s = s + dx(nx+1:nx+ns); 
         lamg = lamg + dx(nx+ns+1:nx+ns+ng); 
