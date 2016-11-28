@@ -1,4 +1,8 @@
-function test_K_slack_gh_pos()
+function homotopy_inequ()
+% modified from test_K_slack_gh_pos()
+% imposing fraction to the boundary rule, s maintained positive
+%                                         lamg maintained negative
+
 % min f(x) 
 % s.t h(x) = 0
 %     g(x) >= 0    constraints' sign is the only thing changed here
@@ -13,7 +17,7 @@ function test_K_slack_gh_pos()
 f_size_min = 0.05;             
 f_size_max = 5;                
 dmu_min = -0.9; 
-dmu_max = -0.01; 
+dmu_max = -0.1; 
 delta_bar = 1;                 % simpler problem, large delta_bar
 phi_bar = 5/180*pi;            
 
@@ -31,8 +35,8 @@ mu = 1;
 x0 = [1;1;1;1];
 [g, h, dg, dh, hg, hh] = confun(x0); 
 
-s0 = g;  % ones(3,1);
-lamg0 = -ones(3,1);
+s0 = ones(3,1);
+lamg0 = zeros(3,1);
 lamh0 = []; 
 x = x0;
 s = s0;
@@ -71,7 +75,7 @@ while mu > 0.0
      % predictor direction
      [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
      
-     dxdmu = gmres(dHdx, dHdmu, [], 0.5);
+     dxdmu = gmres(dHdx, dHdmu, [], 1e-1);
      % dxdmu = dHdx \ dHdmu;
      tau = [dxdmu; -1];    
      t = tau./norm(tau);             % normalized Newton step
@@ -90,18 +94,13 @@ while mu > 0.0
     
     tsave = t; 
     
-    x = x + step_size.*t(1:nx);
-    s = s + step_size.*t(nx+1:nx+ns);
-    lamg = lamg + step_size.*t(nx+ns+1:nx+ns+ng);
+    % make sure that x, s, mu update follow certain rules
     if ~isempty(lamh0)
-        lamh = lamh + step_size.*t(nx+ns+ng+1:end-1);
+        [x, s, mu, lamg, lamh] = update(x, s, mu, step_size, t, dmu_min, dmu_max, lamg, lamh); 
+    else
+        [x, s, mu, lamg] = update(x, s, mu, step_size, t, dmu_min, dmu_max, lamg); 
     end
-    dmu = step_size.*t(end); 
-    dmu = max(dmu_min, dmu);
-    dmu = min(dmu_max, dmu);    
-    mu = mu + dmu; 
-    
-    mu = max(0.0, mu); 
+
     
     [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
     % lam = solve_lam(mu,x,b0,c0, lam);
@@ -117,14 +116,16 @@ while mu > 0.0
         newton_iter = newton_iter + 1; 
         inner_iter = inner_iter + 1; 
         % dx = -dHdx\Homo;
-        dx = -gmres(dHdx, Homo);
-        x = x + dx(1:nx);
-        s = s + dx(nx+1:nx+ns); 
-        lamg = lamg + dx(nx+ns+1:nx+ns+ng); 
+        dx = -gmres(dHdx, Homo, [], 1e-1);
+        
+        
         if ~isempty(lamh0)
-            lamh = lamh + dx(nx+ns+ng+1:end);
+            [x, s, lamg, lamh] = update_newton(x, s, dx, lamg, lamh); 
+        else
+            [x, s, lamg] = update_newton(x, s, dx, lamg); 
         end
         
+               
         [Homo, dHdx, dHdmu] = obj_homo(x, s, lamg, lamh, mu, x0, s0, lamg0, lamh0); 
         normH = norm(Homo);
     end 
@@ -154,6 +155,100 @@ outer_iter
 inner_iter
 end
 
+function [x, s, lamg, varargout] = update_newton(x, s, dx, lamg, varargin)
+tau = 0.995; 
+        
+    % slack    alpha_s   (0, step_size)
+    ps = dx(length(x)+1 : length(x)+length(s));                
+    alpha_s = max(0.0, max( -tau.*s ./ps));   % 0.0: ineffective 
+    
+    if alpha_s == 0.0
+        alpha = 1.0;
+    else
+        alpha = min(1, alpha_s); 
+    end
+    
+    s = s + alpha.*ps;
+    x = x + alpha.*dx(1:length(x));
+    if any(s <= 0)
+        sprintf('s contains non-positive element in Newton')
+        a=1; 
+    end
+   
+    % lamgda_g
+    plamg = dx(length(x)+length(s)+1 : length(x)+length(s)+length(s));
+    alpha_p = max(0.0, max( -tau.*lamg ./plamg));   % 0.0: ineffective 
+    if alpha_p == 0.0
+        alpha = 1.0;
+    else
+        alpha = alpha_p; 
+    end
+    
+    lamg = lamg + alpha.*plamg; 
+    
+    if ~isempty(varargin)
+        lamh = varargin{1}; 
+        lamh = lamh + alpha.*dx(length(x)+length(s)+length(s)+1: length(dx)-1);
+        varargout{1} = lamh; 
+    end
+    
+
+
+end
+
+
+function [x, s, mu, lamg, varargout] = update(x, s, mu, step_size, t, dmu_min, dmu_max, lamg, varargin)
+
+    tau = 0.995; 
+    
+    % mu 
+    dmu = step_size.*t(end); 
+    dmu = max(dmu_min, dmu);
+    dmu = min(dmu_max, dmu);    
+    mu = mu + dmu; 
+    
+    step_mu = dmu./t(end); 
+    
+    mu = max(0.0, mu); 
+    
+    % slack    alpha_s   (0, step_size)
+    ps = t(length(x)+1 : length(x)+length(s)); 
+    
+    alpha_s = max(0.0, max( -tau.*s ./ps));   % 0.0: ineffective 
+    
+    if alpha_s == 0.0
+        alpha = step_size;
+    else
+        alpha = min(alpha_s, step_size); 
+    end
+    
+    s = s + alpha.*ps;
+    x = x + alpha.*t(1:length(x));
+    if any(s <= 0)
+        sprintf('s contains non-positive element in predictor')
+    end
+   
+    % lamgda_g
+    plamg = t(length(x)+length(s)+1 : length(x)+length(s)+length(s));
+    alpha_p = max(0.0, max( -tau.*lamg ./plamg));   % 0.0: ineffective 
+    if alpha_p == 0.0
+        alpha = step_size;
+    else
+        alpha = min(alpha_p, step_size); 
+    end
+    
+    lamg = lamg + alpha.*plamg; 
+    
+    if ~isempty(varargin)
+        lamh = varargin{1}; 
+        lamh = lamh + alpha.*t(length(x)+length(s)+length(s)+1:end-1);
+        varargout{1} = lamh; 
+    end
+    
+
+end
+
+
 function K = obj_K(x, s, lamg, lamh, mu)
 [f, df, hf] = objfun(x);
 [g, h, dg, dh, hg, hh] = confun(x); 
@@ -169,7 +264,7 @@ end
 
 e = ones(size(lamg)); 
 K = [lag_grad;
-     -s.*lamg;   
+     -s.*lamg;       %- mu.*e;   
      g - s;
      h]; 
 end
@@ -204,14 +299,12 @@ dK1dmu = -lag_grad + (x-x0);
 
 e = ones(size(lamg)); 
 
-K2 = (1-mu).*(-s.*lamg) + mu.*(s-s0); 
+K2 = (1-mu).*(-lamg.*s ) + mu.*(s-s0);     % - mu.*e
 dK2dx = zeros(length(lamg), length(x));
-dK2ds = -(1-mu).*diag(lamg) + mu.*eye(length(s)); 
-dK2dlamg = -(1-mu).*diag(s);   
-% dK2ds = -(1-mu).*diag(lamg./s) + mu.*eye(length(s)); 
-% dK2dlamg = -(1-mu).*eye(length(s));
+dK2ds = -(1-mu).*diag(lamg./s) + mu.*eye(length(s));     % lamg
+dK2dlamg = -(1-mu).*eye(length(lamg));                   % diag(s)    
 dK2dlamh = zeros(length(K2), length(lamh));
-dK2dmu = s.*lamg + (s-s0); 
+dK2dmu = s.*lamg  + (s-s0);                % + mu.*e
 
 K3 = (1-mu).*(g-s) - mu.*(lamg - lamg0); 
 dK3dx = (1-mu).*dg'; 
